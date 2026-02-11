@@ -1,0 +1,6 @@
+
+{
+  "name": "MailFlow Pro",
+  "description": "A robust bulk email orchestration dashboard that manages multi-sender campaigns with automated sender rotation and manual template controls. Supports JSON, CSV, and Excel datasets.",
+  "requestFramePermissions": []
+}
