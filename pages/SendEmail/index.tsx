@@ -1,45 +1,32 @@
 import React, { useState, useCallback, useMemo } from "react";
 import { Sender, Receiver, BatchPlan, LogEntry, AppStatus } from "../../types";
-import { sendEmail, verifySmtpCredential } from "../../services/emailService";
+import { sendEmail } from "../../services/emailService";
 import { v4 as uuidv4 } from "uuid";
-import * as XLSX from "xlsx";
 import { useMail } from "@/utils/MailContext";
-import { Link } from "react-router-dom";
-
-// Declare html2pdf for TypeScript if using the CDN/external script
-declare const html2pdf: any;
 
 // --- MAIN APP COMPONENT ---
 const SendEmail = () => {
   const {
     receivers,
-    setReceivers,
     logs,
     setLogs,
-    receiverFileName,
-    setReceiverFileName,
     senders,
-    setSenders,
     htmlTemplate,
-    setHtmlTemplate,
-    backendLogs,
     throughput,
     setThroughput,
     setBackendLogs,
     sendLimit,
-    setSendLimit,
   } = useMail();
-  // Navigation State
-
-  // State: Data
 
   // State: App Flow
   const [status, setStatus] = useState<AppStatus>(AppStatus.IDLE);
 
   // State: Content
+  // CHANGED: This now holds a raw string that might contain multiple lines
   const [emailSubject, setEmailSubject] = useState(
-    "Your Digital Invoice - {invoice}",
+    "Your Digital Invoice - {invoice}\nInvoice #{invoice} for {name}\nNew Document: {invoice}",
   );
+  
   const [emailBody, setEmailBody] = useState(`Hello {name},
 
 Please find your secure digital invoice ({invoice}) attached to this email. 
@@ -54,21 +41,19 @@ Thank you for choosing McaFee Secure Services.
 Best Regards,
 The PayPal Team`);
 
-  // State: Progress Tracking (Round-Robin specific)
-  const [currentBatchIndex, setCurrentBatchIndex] = useState(0); // Tracks which sender is currently "firing"
-  const [senderProgress, setSenderProgress] = useState<Record<number, number>>(
-    {},
-  ); // Tracks progress per sender
+  // State: Progress Tracking
+  const [currentBatchIndex, setCurrentBatchIndex] = useState(0); 
+  const [senderProgress, setSenderProgress] = useState<Record<number, number>>({});
 
   // --- LOGGING UTILITY ---
   const addLog = useCallback(
     (message: string, level: LogEntry["level"] = "info", isBackend = false) => {
       const newLog = { id: uuidv4(), timestamp: new Date(), level, message };
       if (isBackend) {
-        setBackendLogs((prev) => [newLog, ...prev].slice(0, 50));
+        setBackendLogs((prev) => [newLog, ...prev].slice(50));
       }
     },
-    [],
+    [setBackendLogs]
   );
 
   // --- HELPERS ---
@@ -95,19 +80,15 @@ The PayPal Team`);
   const batchPlans = useMemo(() => {
     if (senders.length === 0 || receivers.length === 0) return [];
 
-    // 1. Initialize empty plans for each sender
     const plans = senders.map((sender) => ({
       sender,
-      receivers: [],
+      receivers: [] as Receiver[],
       status: "pending",
       progress: 0,
     }));
 
-    // 2. Distribute receivers Modulo style (1 for you, 1 for you...)
     receivers.forEach((receiver, index) => {
       const senderIndex = index % senders.length;
-
-      // Respect the per-sender limit
       if (plans[senderIndex].receivers.length < sendLimit) {
         plans[senderIndex].receivers.push(receiver);
       }
@@ -116,38 +97,39 @@ The PayPal Team`);
     return plans;
   }, [senders, receivers, sendLimit]);
 
-  // --- LOGIC: ROUND ROBIN EXECUTION ---
+  // --- LOGIC: EXECUTION ---
   const startCampaign = async () => {
     if (batchPlans.length === 0) return;
     setStatus(AppStatus.PROCESSING);
-    setSenderProgress({}); // Reset progress bars
-    addLog(
-      "RELAY: Initializing MedLock Round-Robin distribution...",
-      "warning",
-    );
+    setSenderProgress({});
+    addLog("RELAY: Initializing Round-Robin distribution...", "warning");
 
     const startTimestamp = Date.now();
     let totalSent = 0;
 
-    // Find the longest queue to determine how many "rounds" of rotation needed
-    const maxQueueLength = Math.max(
-      ...batchPlans.map((p) => p.receivers.length),
-    );
+    // 1. PREPARE SUBJECTS
+    // Split by newline and remove empty lines to get the rotation pool
+    const subjectTemplates = emailSubject.split("\n").filter(s => s.trim() !== "");
+    
+    if (subjectTemplates.length === 0) {
+        addLog("Error: No subjects defined.", "error");
+        setStatus(AppStatus.IDLE);
+        return;
+    }
 
-    // Outer Loop: The Email Index (1st email, 2nd email, 3rd email...)
+    const maxQueueLength = Math.max(...batchPlans.map((p) => p.receivers.length));
+
+    // Outer Loop: Email Index
     for (let i = 0; i < maxQueueLength; i++) {
-      // Inner Loop: The Senders (Sender 0, Sender 1, Sender 2...)
+      // Inner Loop: Senders
       for (let sIdx = 0; sIdx < batchPlans.length; sIdx++) {
         const batch = batchPlans[sIdx];
-
-        // If this sender is out of emails, skip them
         if (i >= batch.receivers.length) continue;
 
-        setCurrentBatchIndex(sIdx); // For UI Highlighting
+        setCurrentBatchIndex(sIdx);
         const rec = batch.receivers[i];
 
         try {
-          // Prepare Content
           const invoice = generateInvoiceNumber();
           const currentDateStr = generateCurrentDate();
 
@@ -158,27 +140,25 @@ The PayPal Team`);
             date: currentDateStr,
           };
 
-          const personalizedSubject = injectVariables(emailSubject, vars);
+          // 2. ROTATE SUBJECT
+          // Use modulo operator against totalSent to loop through the subject array
+          const rawSubject = subjectTemplates[totalSent % subjectTemplates.length];
+          const personalizedSubject = injectVariables(rawSubject, vars);
 
-          // 1. Prepare the Personal Message from the textarea
+          // Prepare Body
           const messageBody = injectVariables(emailBody, vars);
           let htmlBody = "";
           if (htmlTemplate) {
-            const personalizedTemplate = injectVariables(htmlTemplate, vars);
-            htmlBody = personalizedTemplate;
+            htmlBody = injectVariables(htmlTemplate, vars);
           }
 
-          // 3. Prepare the PDF (using ONLY the template content)
-          let attachment = undefined;
-
-          // 4. Send
+          // Send
           await sendEmail({
             sender: batch.sender,
             receiver: rec,
             subject: personalizedSubject,
             body: messageBody,
-            html: htmlBody, // Now contains BOTH the message and the HTML template
-            attachment: attachment,
+            html: htmlBody, 
           });
 
           // Update Stats
@@ -186,30 +166,18 @@ The PayPal Team`);
           const elapsedSec = (Date.now() - startTimestamp) / 1000;
           setThroughput(Math.round((totalSent / elapsedSec) * 60));
 
-          // Update individual sender progress
           setSenderProgress((prev) => ({ ...prev, [sIdx]: i + 1 }));
 
           if ((i + 1) % 5 === 0) {
-            addLog(
-              `Success: [${batch.sender.email}] -> ${rec.email}`,
-              "success",
-              true,
-            );
+            addLog(`Success: [${batch.sender.email}] -> ${rec.email}`, "success", true);
           } else {
-            // Less verbose success log for every single email to avoid clutter,
-            // but strictly logging failures
-            addLog(`Sent: ${rec.email}`, "info", false);
+            addLog(`Sent: ${rec.email} | Subj: "${personalizedSubject.substring(0, 15)}..."`, "info", false);
           }
         } catch (err: any) {
-          addLog(
-            `Failure: [${batch.sender.email}] -> ${rec.email} : ${err.message}`,
-            "error",
-            true,
-          );
+          addLog(`Failure: [${batch.sender.email}] -> ${rec.email} : ${err.message}`, "error", true);
         }
 
-        // Delay between switching senders (Rotational Delay)
-        // Adjust this for speed. 100ms means smooth rotation.
+        // Delay
         await new Promise((r) => setTimeout(r, 100));
       }
     }
@@ -223,24 +191,34 @@ The PayPal Team`);
       <div className="glass rounded-[3.5rem] p-10 min-h-[750px] shadow-2xl flex flex-col relative border-white/5 overflow-hidden">
         <div className="flex justify-between items-start mb-10">
           <div className="space-y-6 w-full mr-4">
-            {/* Subject Input */}
+            
+            {/* --- MODIFIED: SUBJECT INPUT (TEXTAREA) --- */}
             <div className="flex flex-col gap-2">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-4 flex items-center gap-2">
-                <i className="fas fa-pen-fancy text-indigo-500"></i> Email
-                Subject
-              </label>
-              <input
+              <div className="flex justify-between items-center ml-4">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                  <i className="fas fa-pen-fancy text-indigo-500"></i> Subject Rotator
+                </label>
+                <span className="text-[9px] bg-indigo-500/10 text-indigo-400 px-2 py-1 rounded border border-indigo-500/20 font-bold uppercase tracking-wider">
+                   {emailSubject.split('\n').filter(s => s.trim()).length} Variations
+                </span>
+              </div>
+              
+              <textarea
                 value={emailSubject}
                 onChange={(e) => setEmailSubject(e.target.value)}
-                className="w-full bg-black/40 border border-slate-800 rounded-2xl p-4 text-lg font-black text-white focus:border-indigo-500 outline-none transition-all shadow-inner"
-                placeholder="Subject..."
+                className="w-full bg-black/40 border border-slate-800 rounded-2xl p-4 text-lg font-bold text-white focus:border-indigo-500 outline-none transition-all shadow-inner h-[100px] custom-scrollbar"
+                placeholder="Enter subjects (one per line)...&#10;Invoice {invoice}&#10;Hello {name}, Check this {invoice}"
+                spellCheck={false}
               />
+              <p className="ml-4 text-[9px] text-slate-600 font-medium">
+                 * Enter multiple subjects on separate lines to rotate them round-robin.
+              </p>
             </div>
+
             {/* Body Input */}
             <div className="flex flex-col gap-2">
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-4 flex items-center gap-2">
-                <i className="fas fa-align-left text-indigo-500"></i> Email
-                Content
+                <i className="fas fa-align-left text-indigo-500"></i> Email Content
               </label>
               <textarea
                 value={emailBody}
@@ -248,10 +226,11 @@ The PayPal Team`);
                 className="w-full bg-black/40 border border-slate-800 rounded-3xl p-7 h-[350px] text-sm text-slate-300 custom-scrollbar font-medium focus:border-indigo-500 outline-none transition-all shadow-inner leading-relaxed"
               />
             </div>
+
             {/* Vars Helper */}
             <div className="bg-slate-900/40 p-5 rounded-2xl border border-white/5 space-y-3">
               <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em]">
-                Dynamic Injection Keys
+                Dynamic Injection Keys (Works in Subject & Body)
               </p>
               <div className="flex flex-wrap gap-2.5">
                 {[
@@ -274,6 +253,7 @@ The PayPal Team`);
                 ))}
               </div>
             </div>
+
             {/* Start Button */}
             <div className="flex justify-end mt-4">
               <button
@@ -311,23 +291,16 @@ The PayPal Team`);
             </p>
 
             {batchPlans?.map((plan, idx) => {
-              // Check if this specific node is currently the one firing in the loop
               const isFiringNow =
                 status === AppStatus.PROCESSING && currentBatchIndex === idx;
-
-              // Retrieve individual progress from state, or default to 0
               const progress = senderProgress[idx] || 0;
-
-              // Check if this node is fully complete
               const isComplete =
                 progress >= plan.receivers.length && plan.receivers.length > 0;
-
-              // Determine styling state
               const cardStateClass = isFiringNow
                 ? "bg-indigo-600/10 border-indigo-500/40 shadow-2xl scale-[1.01]"
                 : isComplete
-                  ? "bg-emerald-900/10 border-emerald-500/20 opacity-75"
-                  : "bg-slate-900/20 border-white/5 opacity-50";
+                ? "bg-emerald-900/10 border-emerald-500/20 opacity-75"
+                : "bg-slate-900/20 border-white/5 opacity-50";
 
               return (
                 <div
@@ -341,12 +314,18 @@ The PayPal Team`);
                           isFiringNow
                             ? "bg-indigo-600 text-white animate-pulse"
                             : isComplete
-                              ? "bg-emerald-600/20 text-emerald-400"
-                              : "bg-slate-800 text-slate-600"
+                            ? "bg-emerald-600/20 text-emerald-400"
+                            : "bg-slate-800 text-slate-600"
                         }`}
                       >
                         <i
-                          className={`fas ${isComplete ? "fa-check-double" : isFiringNow ? "fa-paper-plane" : "fa-server"}`}
+                          className={`fas ${
+                            isComplete
+                              ? "fa-check-double"
+                              : isFiringNow
+                              ? "fa-paper-plane"
+                              : "fa-server"
+                          }`}
                         ></i>
                       </div>
                       <div>
@@ -368,7 +347,6 @@ The PayPal Team`);
                     </div>
                   </div>
 
-                  {/* Always show progress bar in Round Robin mode so we see them fill up in parallel */}
                   <div className="mt-6 space-y-3">
                     <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                       <span>
@@ -376,9 +354,7 @@ The PayPal Team`);
                       </span>
                       <span
                         className={
-                          isFiringNow
-                            ? "text-indigo-400 font-black"
-                            : "text-slate-600"
+                          isFiringNow ? "text-indigo-400 font-black" : "text-slate-600"
                         }
                       >
                         {plan.receivers.length > 0
@@ -389,9 +365,17 @@ The PayPal Team`);
                     </div>
                     <div className="w-full bg-black/60 rounded-full h-2 overflow-hidden border border-white/5">
                       <div
-                        className={`h-full transition-all duration-500 ${isComplete ? "bg-emerald-500" : "bg-gradient-to-r from-indigo-600 to-blue-500"}`}
+                        className={`h-full transition-all duration-500 ${
+                          isComplete
+                            ? "bg-emerald-500"
+                            : "bg-gradient-to-r from-indigo-600 to-blue-500"
+                        }`}
                         style={{
-                          width: `${plan.receivers.length > 0 ? (progress / plan.receivers.length) * 100 : 0}%`,
+                          width: `${
+                            plan.receivers.length > 0
+                              ? (progress / plan.receivers.length) * 100
+                              : 0
+                          }%`,
                         }}
                       ></div>
                     </div>
