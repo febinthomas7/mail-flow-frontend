@@ -166,10 +166,10 @@ Details:
 - Email: {email}
 - Date: {date}
 
-Thank you for choosing MedLock Secure Services.
+Thank you for choosing McaFee Secure Services.
 
 Best Regards,
-The MedLock Team`);
+The PayPal Team`);
 
   // State: Files & Assets
   const [htmlTemplate, setHtmlTemplate] = useState<string | null>(null);
