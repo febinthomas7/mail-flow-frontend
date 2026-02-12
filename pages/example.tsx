@@ -1,33 +1,11 @@
 import React, { useState, useCallback, useMemo } from "react";
 import { Sender, Receiver, BatchPlan, LogEntry, AppStatus } from "./types";
-import { sendEmail } from "./services/emailService";
+import { sendEmail, verifySmtpCredential } from "./services/emailService";
 import { v4 as uuidv4 } from "uuid";
 import * as XLSX from "xlsx";
 
 // Declare html2pdf for TypeScript if using the CDN/external script
 declare const html2pdf: any;
-
-// --- API HELPER: VERIFY SMTP ---
-const verifySmtpCredential = async (sender: Sender) => {
-  try {
-    const response = await fetch("http://localhost:3001/api/verify-smtp", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        smtpConfig: {
-          host: sender.host,
-          port: sender.port,
-          username: sender.email || sender.username,
-          password: sender.password,
-        },
-      }),
-    });
-    const data = await response.json();
-    return { success: data.success, error: data.error };
-  } catch (err: any) {
-    return { success: false, error: "Network/Server Error" };
-  }
-};
 
 // --- COMPONENT: STAT CARD ---
 const StatCard = ({
@@ -165,110 +143,162 @@ const FileDropZone = ({
 };
 
 // --- COMPONENT: SMTP VERIFIER (NEW) ---
-const SmtpVerifier = ({ senders, addLog }: { senders: Sender[], addLog: any }) => {
+const SmtpVerifier = ({
+  senders,
+  addLog,
+}: {
+  senders: Sender[];
+  addLog: any;
+}) => {
   const [verifying, setVerifying] = useState(false);
-  const [results, setResults] = useState<Record<string, { status: 'valid' | 'invalid', msg?: string }>>({});
+  const [results, setResults] = useState<
+    Record<string, { status: "valid" | "invalid"; msg?: string }>
+  >({});
 
   const runVerification = async () => {
     if (senders.length === 0) return;
     setVerifying(true);
-    
+
     for (const sender of senders) {
       const key = sender.email || sender.username;
       const res = await verifySmtpCredential(sender);
-      
-      setResults(prev => ({
+
+      setResults((prev) => ({
         ...prev,
-        [key]: { status: res.success ? 'valid' : 'invalid', msg: res.success ? 'Authenticated' : res.error }
+        [key]: {
+          status: res.success ? "valid" : "invalid",
+          msg: res.success ? "Authenticated" : res.error,
+        },
       }));
 
-      if (res.success) addLog(`Verified: ${key} is VALID.`, 'success');
-      else addLog(`Failed: ${key} - ${res.error}`, 'error');
-      
-      await new Promise(r => setTimeout(r, 200)); // Rate limiting
+      if (res.success) addLog(`Verified: ${key} is VALID.`, "success");
+      else addLog(`Failed: ${key} - ${res.error}`, "error");
+
+      await new Promise((r) => setTimeout(r, 200)); // Rate limiting
     }
     setVerifying(false);
   };
 
-  const validCount = Object.values(results).filter(r => r.status === 'valid').length;
-  const invalidCount = Object.values(results).filter(r => r.status === 'invalid').length;
+  const validCount = Object.values(results).filter(
+    (r) => r.status === "valid",
+  ).length;
+  const invalidCount = Object.values(results).filter(
+    (r) => r.status === "invalid",
+  ).length;
 
   return (
     <div className="glass rounded-[3.5rem] p-10 min-h-[750px] shadow-2xl flex flex-col relative border-white/5 overflow-hidden">
-       <div className="flex justify-between items-center mb-8">
-          <div>
-            <h2 className="text-2xl font-black uppercase text-white tracking-tighter">SMTP Validator</h2>
-            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Check credentials before sending</p>
-          </div>
-          <button 
-            onClick={runVerification}
-            disabled={verifying || senders.length === 0}
-            className={`px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${verifying ? 'bg-slate-800 text-slate-500' : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'}`}
-          >
-            {verifying ? <><i className="fas fa-circle-notch fa-spin mr-2"></i> Checking...</> : 'Verify Batch'}
-          </button>
-       </div>
-
-       {/* Results Stats */}
-       <div className="flex gap-4 mb-6">
-          <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-2 flex-1">
-             <span className="block text-[9px] text-emerald-400 font-black uppercase">Valid</span>
-             <span className="text-xl text-white font-black">{validCount}</span>
-          </div>
-          <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl px-4 py-2 flex-1">
-             <span className="block text-[9px] text-rose-400 font-black uppercase">Invalid</span>
-             <span className="text-xl text-white font-black">{invalidCount}</span>
-          </div>
-       </div>
-
-       {/* List */}
-       <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 pr-2">
-          {senders.length === 0 ? (
-            <div className="text-center py-20 opacity-30">
-               <i className="fas fa-server text-6xl mb-4 text-slate-500"></i>
-               <p className="font-bold uppercase text-slate-400">No Senders Loaded</p>
-            </div>
+      <div className="flex justify-between items-center mb-8">
+        <div>
+          <h2 className="text-2xl font-black uppercase text-white tracking-tighter">
+            SMTP Validator
+          </h2>
+          <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">
+            Check credentials before sending
+          </p>
+        </div>
+        <button
+          onClick={runVerification}
+          disabled={verifying || senders.length === 0}
+          className={`px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${verifying ? "bg-slate-800 text-slate-500" : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/20"}`}
+        >
+          {verifying ? (
+            <>
+              <i className="fas fa-circle-notch fa-spin mr-2"></i> Checking...
+            </>
           ) : (
-             senders.map((sender, idx) => {
-                const key = sender.email || sender.username;
-                const result = results[key];
-                return (
-                   <div key={idx} className={`p-4 rounded-2xl border flex items-center justify-between transition-all ${
-                      result?.status === 'valid' ? 'bg-emerald-500/5 border-emerald-500/30' : 
-                      result?.status === 'invalid' ? 'bg-rose-500/5 border-rose-500/30' : 
-                      'bg-slate-900/40 border-slate-800'
-                   }`}>
-                      <div className="flex items-center gap-4">
-                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                             result?.status === 'valid' ? 'bg-emerald-500 text-white' : 
-                             result?.status === 'invalid' ? 'bg-rose-500 text-white' : 
-                             'bg-slate-800 text-slate-500'
-                         }`}>
-                             <i className={`fas ${
-                                result?.status === 'valid' ? 'fa-check' : 
-                                result?.status === 'invalid' ? 'fa-times' : 
-                                'fa-shield-alt'
-                             }`}></i>
-                         </div>
-                         <div>
-                            <p className="text-sm font-bold text-white">{sender.email || sender.username}</p>
-                            <p className="text-[10px] font-mono text-slate-500">{sender.host}</p>
-                         </div>
-                      </div>
-                      <div className="text-right">
-                          <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-md ${
-                              result?.status === 'valid' ? 'bg-emerald-500/20 text-emerald-400' : 
-                              result?.status === 'invalid' ? 'bg-rose-500/20 text-rose-400' : 
-                              'bg-slate-800 text-slate-600'
-                          }`}>
-                             {result?.msg || 'Pending'}
-                          </span>
-                      </div>
-                   </div>
-                )
-             })
+            "Verify Batch"
           )}
-       </div>
+        </button>
+      </div>
+
+      {/* Results Stats */}
+      <div className="flex gap-4 mb-6">
+        <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-2 flex-1">
+          <span className="block text-[9px] text-emerald-400 font-black uppercase">
+            Valid
+          </span>
+          <span className="text-xl text-white font-black">{validCount}</span>
+        </div>
+        <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl px-4 py-2 flex-1">
+          <span className="block text-[9px] text-rose-400 font-black uppercase">
+            Invalid
+          </span>
+          <span className="text-xl text-white font-black">{invalidCount}</span>
+        </div>
+      </div>
+
+      {/* List */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 pr-2">
+        {senders.length === 0 ? (
+          <div className="text-center py-20 opacity-30">
+            <i className="fas fa-server text-6xl mb-4 text-slate-500"></i>
+            <p className="font-bold uppercase text-slate-400">
+              No Senders Loaded
+            </p>
+          </div>
+        ) : (
+          senders.map((sender, idx) => {
+            const key = sender.email || sender.username;
+            const result = results[key];
+            return (
+              <div
+                key={idx}
+                className={`p-4 rounded-2xl border flex items-center justify-between transition-all ${
+                  result?.status === "valid"
+                    ? "bg-emerald-500/5 border-emerald-500/30"
+                    : result?.status === "invalid"
+                      ? "bg-rose-500/5 border-rose-500/30"
+                      : "bg-slate-900/40 border-slate-800"
+                }`}
+              >
+                <div className="flex items-center gap-4">
+                  <div
+                    className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                      result?.status === "valid"
+                        ? "bg-emerald-500 text-white"
+                        : result?.status === "invalid"
+                          ? "bg-rose-500 text-white"
+                          : "bg-slate-800 text-slate-500"
+                    }`}
+                  >
+                    <i
+                      className={`fas ${
+                        result?.status === "valid"
+                          ? "fa-check"
+                          : result?.status === "invalid"
+                            ? "fa-times"
+                            : "fa-shield-alt"
+                      }`}
+                    ></i>
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-white">
+                      {sender.email || sender.username}
+                    </p>
+                    <p className="text-[10px] font-mono text-slate-500">
+                      {sender.host}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span
+                    className={`text-[10px] font-black uppercase px-2 py-1 rounded-md ${
+                      result?.status === "valid"
+                        ? "bg-emerald-500/20 text-emerald-400"
+                        : result?.status === "invalid"
+                          ? "bg-rose-500/20 text-rose-400"
+                          : "bg-slate-800 text-slate-600"
+                    }`}
+                  >
+                    {result?.msg || "Pending"}
+                  </span>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
     </div>
   );
 };
@@ -454,7 +484,7 @@ The PayPal Team`);
     if (senders.length === 0 || receivers.length === 0) return [];
 
     // 1. Initialize empty plans for each sender
-    const plans: BatchPlan[] = senders.map((sender) => ({
+    const plans = senders.map((sender) => ({
       sender,
       receivers: [],
       status: "pending",
@@ -610,18 +640,18 @@ The PayPal Team`);
           </div>
 
           <div className="flex bg-slate-900/60 p-2 rounded-2xl border border-white/5 shadow-2xl">
-              <button 
-                onClick={() => setShowVerifier(false)}
-                className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!showVerifier ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}
-              >
-                  Dispatcher
-              </button>
-              <button 
-                onClick={() => setShowVerifier(true)}
-                className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${showVerifier ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}
-              >
-                  SMTP Verifier
-              </button>
+            <button
+              onClick={() => setShowVerifier(false)}
+              className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!showVerifier ? "bg-indigo-600 text-white shadow-lg" : "text-slate-500 hover:text-white"}`}
+            >
+              Dispatcher
+            </button>
+            <button
+              onClick={() => setShowVerifier(true)}
+              className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${showVerifier ? "bg-emerald-600 text-white shadow-lg" : "text-slate-500 hover:text-white"}`}
+            >
+              SMTP Verifier
+            </button>
           </div>
         </header>
 
@@ -751,196 +781,198 @@ The PayPal Team`);
           {/* RIGHT COLUMN: EDITOR OR VERIFIER */}
           <div className="lg:col-span-8 space-y-8">
             {showVerifier ? (
-                // --- VIEW: SMTP VERIFIER ---
-                <SmtpVerifier senders={senders} addLog={addLog} />
+              // --- VIEW: SMTP VERIFIER ---
+              <SmtpVerifier senders={senders} addLog={addLog} />
             ) : (
-                // --- VIEW: CAMPAIGN EDITOR (Existing) ---
-                <div className="glass rounded-[3.5rem] p-10 min-h-[750px] shadow-2xl flex flex-col relative border-white/5 overflow-hidden">
+              // --- VIEW: CAMPAIGN EDITOR (Existing) ---
+              <div className="glass rounded-[3.5rem] p-10 min-h-[750px] shadow-2xl flex flex-col relative border-white/5 overflow-hidden">
                 <div className="flex justify-between items-start mb-10">
-                    <div className="space-y-6 w-full mr-4">
+                  <div className="space-y-6 w-full mr-4">
                     {/* Subject Input */}
                     <div className="flex flex-col gap-2">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-4 flex items-center gap-2">
-                        <i className="fas fa-pen-fancy text-indigo-500"></i> Email
-                        Subject
-                        </label>
-                        <input
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-4 flex items-center gap-2">
+                        <i className="fas fa-pen-fancy text-indigo-500"></i>{" "}
+                        Email Subject
+                      </label>
+                      <input
                         value={emailSubject}
                         onChange={(e) => setEmailSubject(e.target.value)}
                         className="w-full bg-black/40 border border-slate-800 rounded-2xl p-4 text-lg font-black text-white focus:border-indigo-500 outline-none transition-all shadow-inner"
                         placeholder="Subject..."
-                        />
+                      />
                     </div>
                     {/* Body Input */}
                     <div className="flex flex-col gap-2">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-4 flex items-center gap-2">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-4 flex items-center gap-2">
                         <i className="fas fa-align-left text-indigo-500"></i>{" "}
                         Email Content
-                        </label>
-                        <textarea
+                      </label>
+                      <textarea
                         value={emailBody}
                         onChange={(e) => setEmailBody(e.target.value)}
                         className="w-full bg-black/40 border border-slate-800 rounded-3xl p-7 h-[350px] text-sm text-slate-300 custom-scrollbar font-medium focus:border-indigo-500 outline-none transition-all shadow-inner leading-relaxed"
-                        />
+                      />
                     </div>
                     {/* Vars Helper */}
                     <div className="bg-slate-900/40 p-5 rounded-2xl border border-white/5 space-y-3">
-                        <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em]">
+                      <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em]">
                         Dynamic Injection Keys
-                        </p>
-                        <div className="flex flex-wrap gap-2.5">
+                      </p>
+                      <div className="flex flex-wrap gap-2.5">
                         {[
-                            { key: "{name}", desc: "Recipient Name" },
-                            { key: "{email}", desc: "Recipient Email" },
-                            { key: "{invoice}", desc: "Generated ID" },
-                            { key: "{date}", desc: "Current Date" },
+                          { key: "{name}", desc: "Recipient Name" },
+                          { key: "{email}", desc: "Recipient Email" },
+                          { key: "{invoice}", desc: "Generated ID" },
+                          { key: "{date}", desc: "Current Date" },
                         ].map((v) => (
-                            <div
+                          <div
                             key={v.key}
                             className="flex flex-col items-start bg-indigo-500/5 p-2 px-3 rounded-lg border border-indigo-500/20 group hover:border-indigo-500/50 transition-all"
-                            >
+                          >
                             <span className="text-indigo-400 text-[10px] font-mono font-bold">
-                                {v.key}
+                              {v.key}
                             </span>
                             <span className="text-[8px] text-slate-600 uppercase font-black">
-                                {v.desc}
+                              {v.desc}
                             </span>
-                            </div>
+                          </div>
                         ))}
-                        </div>
+                      </div>
                     </div>
                     {/* Start Button */}
                     <div className="flex justify-end mt-4">
-                        <button
+                      <button
                         onClick={startCampaign}
                         disabled={
-                            status === AppStatus.PROCESSING || batchPlans.length === 0
+                          status === AppStatus.PROCESSING ||
+                          batchPlans.length === 0
                         }
                         className={`px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all ${
-                            status === AppStatus.PROCESSING || batchPlans.length === 0
+                          status === AppStatus.PROCESSING ||
+                          batchPlans.length === 0
                             ? "bg-slate-800 text-slate-600 cursor-not-allowed opacity-50"
                             : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_20px_rgba(79,70,229,0.3)] active:scale-95"
                         }`}
-                        >
+                      >
                         Start Dispatch
-                        </button>
+                      </button>
                     </div>
-                    </div>
+                  </div>
                 </div>
 
                 {/* VISUALIZATION: ROUND ROBIN QUEUE */}
                 {batchPlans.length === 0 ? (
-                    <div className="flex-1 flex flex-col items-center justify-center opacity-10 text-center select-none py-20">
+                  <div className="flex-1 flex flex-col items-center justify-center opacity-10 text-center select-none py-20">
                     <i className="fas fa-satellite text-[10rem] mb-8"></i>
                     <p className="text-2xl font-black uppercase tracking-[0.4em]">
-                        Ready for Dispatch
+                      Ready for Dispatch
                     </p>
                     <p className="text-[10px] mt-4 uppercase font-black tracking-widest text-indigo-400">
-                        Load assets to generate queue
+                      Load assets to generate queue
                     </p>
-                    </div>
+                  </div>
                 ) : (
-                    <div className="space-y-4 overflow-y-auto pr-4 custom-scrollbar flex-1 max-h-[300px] mt-4">
+                  <div className="space-y-4 overflow-y-auto pr-4 custom-scrollbar flex-1 max-h-[300px] mt-4">
                     <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                        <i className="fas fa-list-check"></i> Round-Robin Sequence
+                      <i className="fas fa-list-check"></i> Round-Robin Sequence
                     </p>
 
                     {batchPlans.map((plan, idx) => {
-                        // Check if this specific node is currently the one firing in the loop
-                        const isFiringNow =
+                      // Check if this specific node is currently the one firing in the loop
+                      const isFiringNow =
                         status === AppStatus.PROCESSING &&
                         currentBatchIndex === idx;
 
-                        // Retrieve individual progress from state, or default to 0
-                        const progress = senderProgress[idx] || 0;
+                      // Retrieve individual progress from state, or default to 0
+                      const progress = senderProgress[idx] || 0;
 
-                        // Check if this node is fully complete
-                        const isComplete =
+                      // Check if this node is fully complete
+                      const isComplete =
                         progress >= plan.receivers.length &&
                         plan.receivers.length > 0;
 
-                        // Determine styling state
-                        const cardStateClass = isFiringNow
+                      // Determine styling state
+                      const cardStateClass = isFiringNow
                         ? "bg-indigo-600/10 border-indigo-500/40 shadow-2xl scale-[1.01]"
                         : isComplete
-                            ? "bg-emerald-900/10 border-emerald-500/20 opacity-75"
-                            : "bg-slate-900/20 border-white/5 opacity-50";
+                          ? "bg-emerald-900/10 border-emerald-500/20 opacity-75"
+                          : "bg-slate-900/20 border-white/5 opacity-50";
 
-                        return (
+                      return (
                         <div
-                            key={idx}
-                            className={`p-6 rounded-3xl border transition-all duration-300 ${cardStateClass}`}
+                          key={idx}
+                          className={`p-6 rounded-3xl border transition-all duration-300 ${cardStateClass}`}
                         >
-                            <div className="flex justify-between items-center">
+                          <div className="flex justify-between items-center">
                             <div className="flex items-center gap-6">
-                                <div
+                              <div
                                 className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl shadow-lg border border-white/5 ${
-                                    isFiringNow
+                                  isFiringNow
                                     ? "bg-indigo-600 text-white animate-pulse"
                                     : isComplete
-                                        ? "bg-emerald-600/20 text-emerald-400"
-                                        : "bg-slate-800 text-slate-600"
+                                      ? "bg-emerald-600/20 text-emerald-400"
+                                      : "bg-slate-800 text-slate-600"
                                 }`}
-                                >
+                              >
                                 <i
-                                    className={`fas ${isComplete ? "fa-check-double" : isFiringNow ? "fa-paper-plane" : "fa-server"}`}
+                                  className={`fas ${isComplete ? "fa-check-double" : isFiringNow ? "fa-paper-plane" : "fa-server"}`}
                                 ></i>
-                                </div>
-                                <div>
+                              </div>
+                              <div>
                                 <p className="text-sm font-black text-white">
-                                    MedLock Node {idx + 1}
+                                  MedLock Node {idx + 1}
                                 </p>
                                 <p className="text-[10px] font-mono text-slate-500 uppercase tracking-tight truncate max-w-[250px]">
-                                    {plan.sender.email}
+                                  {plan.sender.email}
                                 </p>
-                                </div>
+                              </div>
                             </div>
                             <div className="text-right">
-                                <p className="text-[10px] font-black text-slate-600 uppercase mb-1">
+                              <p className="text-[10px] font-black text-slate-600 uppercase mb-1">
                                 Assigned
-                                </p>
-                                <p className="text-xl font-black text-slate-400">
+                              </p>
+                              <p className="text-xl font-black text-slate-400">
                                 {plan.receivers.length}
-                                </p>
+                              </p>
                             </div>
-                            </div>
+                          </div>
 
-                            {/* Always show progress bar in Round Robin mode so we see them fill up in parallel */}
-                            <div className="mt-6 space-y-3">
+                          {/* Always show progress bar in Round Robin mode so we see them fill up in parallel */}
+                          <div className="mt-6 space-y-3">
                             <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                                <span>
+                              <span>
                                 Relaying: {progress} / {plan.receivers.length}
-                                </span>
-                                <span
+                              </span>
+                              <span
                                 className={
-                                    isFiringNow
+                                  isFiringNow
                                     ? "text-indigo-400 font-black"
                                     : "text-slate-600"
                                 }
-                                >
+                              >
                                 {plan.receivers.length > 0
-                                    ? Math.round(
-                                        (progress / plan.receivers.length) * 100,
+                                  ? Math.round(
+                                      (progress / plan.receivers.length) * 100,
                                     )
-                                    : 0}
+                                  : 0}
                                 %
-                                </span>
+                              </span>
                             </div>
                             <div className="w-full bg-black/60 rounded-full h-2 overflow-hidden border border-white/5">
-                                <div
+                              <div
                                 className={`h-full transition-all duration-500 ${isComplete ? "bg-emerald-500" : "bg-gradient-to-r from-indigo-600 to-blue-500"}`}
                                 style={{
-                                    width: `${plan.receivers.length > 0 ? (progress / plan.receivers.length) * 100 : 0}%`,
+                                  width: `${plan.receivers.length > 0 ? (progress / plan.receivers.length) * 100 : 0}%`,
                                 }}
-                                ></div>
+                              ></div>
                             </div>
-                            </div>
+                          </div>
                         </div>
-                        );
+                      );
                     })}
-                    </div>
+                  </div>
                 )}
-                </div>
+              </div>
             )}
           </div>
         </main>

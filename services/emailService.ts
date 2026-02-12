@@ -1,4 +1,3 @@
-/// <reference types="vite/client" />
 import { Sender, Receiver } from "../types";
 
 export enum SMTPStage {
@@ -14,6 +13,7 @@ interface EmailPayload {
   receiver: Receiver;
   subject: string;
   body: string;
+  html?: string; // Optional HTML content
   attachment?: {
     content: string; // Base64
     filename: string;
@@ -22,7 +22,7 @@ interface EmailPayload {
   onStageChange?: (stage: SMTPStage) => void;
 }
 
-const BACKEND_URL = `${import.meta.env.VITE_BASE_URL}/api/send-email`;
+const backendUrl = import.meta.env.VITE_BASE_URL;
 
 /**
  * Functional SMTP Dispatcher
@@ -31,7 +31,7 @@ const BACKEND_URL = `${import.meta.env.VITE_BASE_URL}/api/send-email`;
 export const sendEmail = async (
   payload: EmailPayload,
 ): Promise<{ success: boolean; messageId: string; rtt: number }> => {
-  const { sender, receiver, subject, body, attachment, onStageChange } =
+  const { sender, receiver, subject, body, html, attachment, onStageChange } =
     payload;
   const startTime = Date.now();
 
@@ -55,6 +55,7 @@ export const sendEmail = async (
         to: receiver.email,
         subject: subject,
         text: body,
+        html: html,
         attachments: attachment
           ? [
               {
@@ -69,7 +70,7 @@ export const sendEmail = async (
 
     setStage(SMTPStage.TRANSMITTING);
 
-    const response = await fetch(BACKEND_URL, {
+    const response = await fetch(`${backendUrl}/api/send-email`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(requestBody),
@@ -95,5 +96,26 @@ export const sendEmail = async (
       );
     }
     throw err;
+  }
+};
+
+export const verifySmtpCredential = async (sender: Sender) => {
+  try {
+    const response = await fetch(`${backendUrl}/api/verify-smtp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        smtpConfig: {
+          host: sender.host,
+          port: sender.port,
+          username: sender.email || sender.username,
+          password: sender.password,
+        },
+      }),
+    });
+    const data = await response.json();
+    return { success: data.success, error: data.error };
+  } catch (err: any) {
+    return { success: false, error: "Network/Server Error" };
   }
 };
