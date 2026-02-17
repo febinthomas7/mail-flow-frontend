@@ -127,10 +127,12 @@ interface VerificationResponse {
   details?: any;
 }
 
-export const verifyTargetEmail = async (email: string): Promise<VerificationResponse> => {
+export const verifyTargetEmail = async (
+  email: string,
+): Promise<VerificationResponse> => {
   try {
     // Ensure port 5000 matches your backend port
-    const response = await fetch("http://localhost:5000/api/verify-target", {
+    const response = await fetch(`${backendUrl}/api/verify-target`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email }),

@@ -325,6 +325,12 @@ const Layout = ({ children }) => {
             >
               SMTP Verifier
             </Link>
+            <Link
+              to="/verify-target"
+              className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${location.pathname === "/verify-target" ? "bg-emerald-600 text-white shadow-lg" : "text-slate-500 hover:text-white"}`}
+            >
+              Target Verifier
+            </Link>
           </div>
         </header>
 

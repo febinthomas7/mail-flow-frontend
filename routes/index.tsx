@@ -2,7 +2,7 @@ import { createBrowserRouter } from "react-router-dom";
 // import { PrivateRoute, PublicRoute } from "../utils"; // ⬅️ import it
 import SendEmail from "@/pages/SendEmail";
 import VerifyEmail from "@/pages/VerifyEmail";
-import CheckEmail from "@/pages/checkEmail/TargetVerifier";
+import TargetVerifier from "@/pages/TargetVerifier";
 import NotFound from "@/pages/NotFound";
 import Login from "@/pages/login";
 import Home from "@/pages/Home";
@@ -35,7 +35,7 @@ const router = createBrowserRouter([
     element: (
       <PrivateRoute redirectTo="/login">
         <Layout>
-          <CheckEmail />
+          <TargetVerifier />
         </Layout>
       </PrivateRoute>
     ),
