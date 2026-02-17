@@ -119,3 +119,24 @@ export const verifySmtpCredential = async (sender: Sender) => {
     return { success: false, error: "Network/Server Error" };
   }
 };
+
+interface VerificationResponse {
+  success: boolean;
+  status?: "valid" | "invalid";
+  error?: string;
+  details?: any;
+}
+
+export const verifyTargetEmail = async (email: string): Promise<VerificationResponse> => {
+  try {
+    // Ensure port 5000 matches your backend port
+    const response = await fetch("http://localhost:5000/api/verify-target", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    return await response.json();
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+};
