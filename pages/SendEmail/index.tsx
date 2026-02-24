@@ -1,11 +1,40 @@
 import React, { useState, useCallback, useMemo } from "react";
-import { Sender, Receiver, BatchPlan, LogEntry, AppStatus } from "../../types";
-import { sendEmail } from "../../services/emailService";
-import { v4 as uuidv4 } from "uuid";
-import { useMail } from "@/utils/MailContext";
+
+// --- MOCKED DEPENDENCIES FOR PREVIEW ---
+export enum AppStatus {
+  IDLE = "IDLE",
+  PROCESSING = "PROCESSING",
+  COMPLETED = "COMPLETED"
+}
+export interface Sender { email: string; name?: string; }
+export interface Receiver { email: string; name?: string; }
+export interface BatchPlan { sender: Sender; receivers: Receiver[]; status: string; progress: number; }
+export interface LogEntry { id: string; timestamp: Date; level: "info" | "warning" | "error" | "success"; message: string; }
+
+// Mock the backend send function
+const sendEmail = async (params: any) => new Promise(resolve => setTimeout(resolve, 600));
+const uuidv4 = () => crypto.randomUUID();
+
+// Mock Context to supply data for preview
+const useMail = () => {
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [backendLogs, setBackendLogs] = useState<LogEntry[]>([]);
+  const [throughput, setThroughput] = useState(0);
+
+  return {
+    receivers: Array.from({ length: 45 }).map((_, i) => ({ email: `client${i+1}@domain.com`, name: `Client ${i+1}` })),
+    senders: [
+      { email: "node1@secure.local" }, 
+      { email: "node2@secure.local" },
+      { email: "node3@relay.net" },
+      { email: "node4@relay.net" }
+    ],
+    logs, setLogs, htmlTemplate: "", throughput, setThroughput, setBackendLogs, sendLimit: 50,
+  };
+};
 
 // --- MAIN APP COMPONENT ---
-const SendEmail = () => {
+export default function SendEmail() {
   const {
     receivers,
     logs,
@@ -22,7 +51,10 @@ const SendEmail = () => {
   const [status, setStatus] = useState<AppStatus>(AppStatus.IDLE);
 
   // State: Content
-  // CHANGED: This now holds a raw string that might contain multiple lines
+  const [senderNames, setSenderNames] = useState(
+    "PayPal Billing\nSecure Services\nAccount Manager for {name}"
+  );
+
   const [emailSubject, setEmailSubject] = useState(
     "Your Digital Invoice - {invoice}\nInvoice #{invoice} for {name}\nNew Document: {invoice}",
   );
@@ -50,7 +82,7 @@ The PayPal Team`);
     (message: string, level: LogEntry["level"] = "info", isBackend = false) => {
       const newLog = { id: uuidv4(), timestamp: new Date(), level, message };
       if (isBackend) {
-        setBackendLogs((prev) => [newLog, ...prev].slice(50));
+        setBackendLogs((prev: any) => [newLog, ...prev].slice(0, 50));
       }
     },
     [setBackendLogs]
@@ -107,9 +139,9 @@ The PayPal Team`);
     const startTimestamp = Date.now();
     let totalSent = 0;
 
-    // 1. PREPARE SUBJECTS
-    // Split by newline and remove empty lines to get the rotation pool
+    // 1. PREPARE SUBJECTS & SENDER NAMES
     const subjectTemplates = emailSubject.split("\n").filter(s => s.trim() !== "");
+    const senderNameTemplates = senderNames.split("\n").filter(s => s.trim() !== "");
     
     if (subjectTemplates.length === 0) {
         addLog("Error: No subjects defined.", "error");
@@ -140,10 +172,15 @@ The PayPal Team`);
             date: currentDateStr,
           };
 
-          // 2. ROTATE SUBJECT
-          // Use modulo operator against totalSent to loop through the subject array
+          // 2. ROTATE SUBJECT & SENDER NAME
           const rawSubject = subjectTemplates[totalSent % subjectTemplates.length];
           const personalizedSubject = injectVariables(rawSubject, vars);
+
+          let personalizedSenderName = "";
+          if (senderNameTemplates.length > 0) {
+            const rawSenderName = senderNameTemplates[totalSent % senderNameTemplates.length];
+            personalizedSenderName = injectVariables(rawSenderName, vars);
+          }
 
           // Prepare Body
           const messageBody = injectVariables(emailBody, vars);
@@ -154,7 +191,7 @@ The PayPal Team`);
 
           // Send
           await sendEmail({
-            sender: batch.sender,
+            sender: { ...batch.sender, name: personalizedSenderName },
             receiver: rec,
             subject: personalizedSubject,
             body: messageBody,
@@ -187,12 +224,32 @@ The PayPal Team`);
   };
 
   return (
-    <div className="lg:col-span-8 space-y-8">
+    <div className="bg-[#020617] min-h-screen p-4 md:p-10 font-sans selection:bg-indigo-500/30">
       <div className="glass rounded-[3.5rem] p-10 min-h-[750px] shadow-2xl flex flex-col relative border-white/5 overflow-hidden">
         <div className="flex justify-between items-start mb-10">
           <div className="space-y-6 w-full mr-4">
             
-            {/* --- MODIFIED: SUBJECT INPUT (TEXTAREA) --- */}
+            {/* --- SENDER NAME ROTATOR --- */}
+            <div className="flex flex-col gap-2">
+              <div className="flex justify-between items-center ml-4">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                  <i className="fas fa-id-badge text-indigo-500"></i> Sender Name Rotator
+                </label>
+                <span className="text-[9px] bg-indigo-500/10 text-indigo-400 px-2 py-1 rounded border border-indigo-500/20 font-bold uppercase tracking-wider">
+                   {senderNames.split('\n').filter(s => s.trim()).length} Variations
+                </span>
+              </div>
+              
+              <textarea
+                value={senderNames}
+                onChange={(e) => setSenderNames(e.target.value)}
+                className="w-full bg-black/40 border border-slate-800 rounded-2xl p-4 text-base font-bold text-slate-300 focus:border-indigo-500 outline-none transition-all shadow-inner h-[80px] custom-scrollbar"
+                placeholder="Enter sender names (one per line)...&#10;Billing Dept&#10;Support Team"
+                spellCheck={false}
+              />
+            </div>
+
+            {/* --- SUBJECT INPUT ROTATOR --- */}
             <div className="flex flex-col gap-2">
               <div className="flex justify-between items-center ml-4">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
@@ -223,7 +280,7 @@ The PayPal Team`);
               <textarea
                 value={emailBody}
                 onChange={(e) => setEmailBody(e.target.value)}
-                className="w-full bg-black/40 border border-slate-800 rounded-3xl p-7 h-[350px] text-sm text-slate-300 custom-scrollbar font-medium focus:border-indigo-500 outline-none transition-all shadow-inner leading-relaxed"
+                className="w-full bg-black/40 border border-slate-800 rounded-3xl p-7 h-[250px] text-sm text-slate-300 custom-scrollbar font-medium focus:border-indigo-500 outline-none transition-all shadow-inner leading-relaxed"
               />
             </div>
 
@@ -273,7 +330,7 @@ The PayPal Team`);
           </div>
         </div>
 
-        {/* VISUALIZATION: ROUND ROBIN QUEUE */}
+        {/* --- MODIFIED: VISUALIZATION QUEUE WITH FIXED SCROLL --- */}
         {batchPlans?.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center opacity-10 text-center select-none py-20">
             <i className="fas fa-satellite text-[10rem] mb-8"></i>
@@ -285,7 +342,7 @@ The PayPal Team`);
             </p>
           </div>
         ) : (
-          <div className="space-y-4 overflow-y-auto pr-4 custom-scrollbar flex-1 max-h-[300px] mt-4">
+          <div className="space-y-4 overflow-y-auto pr-4 custom-scrollbar flex-1 max-h-[400px] mt-4 border-t border-slate-800/50 pt-6">
             <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
               <i className="fas fa-list-check"></i> Round-Robin Sequence
             </p>
@@ -388,6 +445,4 @@ The PayPal Team`);
       </div>
     </div>
   );
-};
-
-export default SendEmail;
+}
