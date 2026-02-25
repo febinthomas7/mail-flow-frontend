@@ -24,7 +24,14 @@ export const MailProvider: React.FC<{ children: ReactNode }> = ({
   const [pdfName, setPdfName] = useState<string>("");
   const [throughput, setThroughput] = useState(0);
   const [sendLimit, setSendLimit] = useState<number>(100);
-
+  const [deliveryFormat, setDeliveryFormat] = useState<string>("html");
+  const [htmlMode, setHtmlMode] = useState<"text" | "file">("file");
+  const [receiverFile, setReceiverFile] = useState<File | null>(null);
+  const [recMode, setRecMode] = useState<"text" | "file">("text");
+  const [smtpType, setSmtpType] = useState<string>("gmail");
+  const [senderFile, setSenderFile] = useState<File | null>(null);
+  const [templateFile, setTemplateFile] = useState<File | null>(null);
+const [manualText, setManualText] = useState("");
   const addLog = (message: string, level: LogEntry["level"]) => {
     const newLog: LogEntry = {
       id: crypto.randomUUID(),
@@ -57,6 +64,15 @@ export const MailProvider: React.FC<{ children: ReactNode }> = ({
         setThroughput,
         sendLimit,
         setSendLimit,
+        manualText,
+      setManualText,
+      templateFile, setTemplateFile,
+      senderFile, setSenderFile,
+      deliveryFormat, setDeliveryFormat,
+      htmlMode, setHtmlMode,
+      recMode, setRecMode,
+      receiverFile, setReceiverFile,
+      smtpType, setSmtpType
       }}
     >
       {children}
