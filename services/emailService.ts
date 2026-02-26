@@ -28,74 +28,41 @@ const backendUrl = import.meta.env.VITE_BASE_URL;
  * Functional SMTP Dispatcher
  * Forwards mail requests to the professional Node.js backend.
  */
-export const sendEmail = async (
-  payload: EmailPayload,
-): Promise<{ success: boolean; messageId: string; rtt: number }> => {
-  const { sender, receiver, subject, body, html, attachment, onStageChange } =
-    payload;
-  const startTime = Date.now();
+// Updated for Batch Processing
+export const sendBatchEmails = async (
+  allTargets: any[],
+  allSenders: any[],
+  options: any,
+): Promise<{ success: boolean; total: number }> => {
+  // Construct the payload to match your backend's expected 'req.body'
+  const requestBody = {
+    targets: allTargets, // The 20,000 objects (email, name, invoice)
+    smtpConfigs: allSenders, // The extracted (email, username, password)
+    subjects: options.subjects,
+    senderNames: options.senderNames,
+    generationOptions: {
+      html: options.html,
+      format: options.format,
+      // Pass any other dynamic data needed for createTags
+    },
+  };
+  console.log("hit");
 
-  const setStage = (stage: SMTPStage) => onStageChange?.(stage);
+  const response = await fetch(`${backendUrl}/api/send-email`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(requestBody),
+  });
 
-  setStage(SMTPStage.CONNECTING);
+  const result = await response.json();
 
-  try {
-    setStage(SMTPStage.PREPARING_MIME);
-
-    const requestBody = {
-      smtpConfig: {
-        host: sender.host,
-        port: sender.port || 587,
-        username: sender.username,
-        password: sender.password,
-        email: sender.email,
-        name: sender.name,
-      },
-      mailOptions: {
-        to: receiver.email,
-        subject: subject,
-        text: body,
-        html: html,
-        attachments: attachment
-          ? [
-              {
-                filename: attachment.filename,
-                content: attachment.content,
-                type: attachment.type,
-              },
-            ]
-          : [],
-      },
+  if (response.ok && result.success) {
+    return {
+      success: true,
+      total: result.total,
     };
-
-    setStage(SMTPStage.TRANSMITTING);
-
-    const response = await fetch(`${backendUrl}/api/send-email`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestBody),
-    });
-
-    const result = await response.json();
-    const rtt = Date.now() - startTime;
-
-    if (response.ok && result.success) {
-      setStage(SMTPStage.ACK_RECEIVED);
-      return {
-        success: true,
-        messageId: result.messageId,
-        rtt,
-      };
-    } else {
-      throw new Error(result.error || `HTTP_ERR_${response.status}`);
-    }
-  } catch (err: any) {
-    if (err.name === "TypeError" && err.message.includes("fetch")) {
-      throw new Error(
-        "BACKEND_OFFLINE: Ensure the Express server (server.js) is running on port 3001.",
-      );
-    }
-    throw err;
+  } else {
+    throw new Error(result.error || "BATCH_FAILED");
   }
 };
 
