@@ -69,13 +69,13 @@ export default function SendEmail() {
 
   // State: Content
   const [senderNames, setSenderNames] = useState(
-    "PayPal Billing\nSecure Services\nAccount Manager for {name}",
+    "PayPal Billing\nSecure Services\nAccount Manager for {{name}}",
   );
   const [emailSubject, setEmailSubject] = useState(
-    "Your Digital Invoice - {invoice}\nInvoice #{invoice} for {name}\nNew Document: {invoice}",
+    "Your Digital Invoice - {{invoice}}\nInvoice #{invoice} for {{name}}\nNew Document: {{invoice}}",
   );
   const [emailBody, setEmailBody] = useState(
-    `Hello {name},\n\nPlease find your secure digital invoice ({invoice}) attached to this email.\n\nDetails:\n- Issued to: {name}\n- Email: {email}\n- Date: {date}\n\nThank you for choosing McaFee Secure Services.\n\nBest Regards,\nThe PayPal Team`,
+    `Hello {{name}},\n\nPlease find your secure digital invoice ({{invoice}}) attached to this email.\n\nDetails:\n- Issued to: {{name}}\n- Email: {{email}}\n- Date: {{date}}\n\nThank you for choosing McaFee Secure Services.\n\nBest Regards,\nThe PayPal Team`,
   );
 
   // State: Progress Tracking
@@ -155,7 +155,8 @@ export default function SendEmail() {
       subjects: emailSubject.split("\n").filter((s) => s.trim()),
       senderNames: senderNames.split("\n").filter((s) => s.trim()),
       generationOptions: {
-        html: htmlTemplate || emailBody,
+        body: emailBody,
+        html: htmlTemplate,
         format: deliveryFormat, // 'html', 'pdf', etc.
         receiverNames: receivers.map((r) => r.name),
         invoices: receivers.map(() => generateInvoiceNumber()),

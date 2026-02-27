@@ -41,12 +41,15 @@ export const sendBatchEmails = async (
     subjects: options.subjects,
     senderNames: options.senderNames,
     generationOptions: {
-      html: options.html,
-      format: options.format,
+      body: options.generationOptions.body,
+      html: options.generationOptions.html,
+      format: options.generationOptions.format,
+      invoices: options.generationOptions.invoices,
+      receiverNames: options.generationOptions.receiverNames,
       // Pass any other dynamic data needed for createTags
     },
   };
-  console.log("hit");
+  console.log("hit", options);
 
   const response = await fetch(`${backendUrl}/api/send-email`, {
     method: "POST",
