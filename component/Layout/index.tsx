@@ -1,7 +1,6 @@
 import { useMail } from "@/utils/MailContext";
 import React, { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
-import Papa from "papaparse"; // Ensure you run: npm install papaparse
 import * as XLSX from "xlsx";
 // --- COMPONENT: STAT CARD ---
 const StatCard = ({ title, value, icon, color, subValue }: any) => (
@@ -107,6 +106,8 @@ export default function Layout({ children }: any) {
       : { pathname: "/send-email" };
 
   const {
+    includeBody,
+    setIncludeBody,
     senderFile,
     senders,
     setSenders, // Added from context
@@ -115,6 +116,7 @@ export default function Layout({ children }: any) {
     setReceivers, // Added from context
     templateFile,
     htmlTemplate,
+    directFiles,
     recMode,
     throughput,
     smtpType,
@@ -132,6 +134,7 @@ export default function Layout({ children }: any) {
     setRecMode,
     setHtmlTemplate,
     setSendLimit,
+    setDirectFiles,
   } = useMail();
 
   // --- NEW: UNIVERSAL FILE PARSER ---
@@ -163,8 +166,8 @@ export default function Layout({ children }: any) {
           if (
             type === "sender" &&
             parsedData.length > 0 &&
-            parsedData[0].username &&
-            parsedData[0].password
+            (parsedData[0] as any).username &&
+            (parsedData[0] as any).password
           ) {
             setSenders(parsedData);
           } else {
@@ -177,7 +180,7 @@ export default function Layout({ children }: any) {
           if (
             type === "receiver" &&
             parsedData.length > 0 &&
-            parsedData[0].email
+            (parsedData[0] as any).email
           ) {
             setReceivers(parsedData);
           } else {
@@ -212,6 +215,25 @@ export default function Layout({ children }: any) {
       reader.readAsText(file);
     }
   };
+
+  const handleFileProcessForDirFiles = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const base64Data = e.target?.result as string;
+
+      // Add to the list of files
+      setDirectFiles((prev) => [
+        ...prev,
+        { name: file.name, base64: base64Data },
+      ]);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Helper to remove a file if the user made a mistake
+  const removeFile = (index: number) => {
+    setDirectFiles((prev) => prev.filter((_, i) => i !== index));
+  };
   const manualReceiversCount = useMemo(
     () =>
       manualText
@@ -225,21 +247,12 @@ export default function Layout({ children }: any) {
   const sendersCount = senders?.length || 0;
   const receiversCount =
     recMode === "text" ? manualReceiversCount : receivers?.length || 0;
-  console.log(
-    "Senders Count:",
-    sendersCount,
-    "Receivers Count:",
-    receiversCount,
-    "Senders:",
-    senders,
-    "Receivers:",
-    receivers,
-  );
+
   const formatOptions = [
-    { id: "html", label: "Direct HTML", icon: "fa-code" },
     { id: "pdf", label: "HTML - PDF", icon: "fa-file-pdf" },
-    { id: "word", label: "HTML - Word", icon: "fa-file-word" },
     { id: "png", label: "HTML - PNG", icon: "fa-file-image" },
+    { id: "html", label: "Direct HTML", icon: "fa-code" },
+    { id: "word", label: "HTML - Word", icon: "fa-file-word" },
   ];
 
   return (
@@ -368,6 +381,21 @@ export default function Layout({ children }: any) {
                   </div>
                 </div>
               </div>
+              <div className="flex items-center space-x-3">
+                <input
+                  id="textbody-toggle"
+                  type="checkbox"
+                  className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
+                  checked={includeBody}
+                  onChange={(e) => setIncludeBody(e.target.checked)}
+                />
+                <label
+                  htmlFor="textbody-toggle"
+                  className="text-sm font-medium text-gray-700 cursor-pointer"
+                >
+                  Include a personalized message in the email body
+                </label>
+              </div>
 
               <div className="grid grid-cols-1 gap-6">
                 <div className="space-y-2">
@@ -484,6 +512,50 @@ export default function Layout({ children }: any) {
                       fileName={templateFile?.name}
                       count={htmlTemplate ? 1 : 0}
                     />
+                  )}
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <FileDropZone
+                      id="dir-file"
+                      label="4. Add Direct files"
+                      icon="fa-file-medical"
+                      color="rose"
+                      onFile={(file: File) =>
+                        handleFileProcessForDirFiles(file)
+                      }
+                      // We show the name of the last file uploaded or a summary
+                      fileName={
+                        directFiles.length > 0
+                          ? `${directFiles.length} files selected`
+                          : "No files selected"
+                      }
+                      count={directFiles.length}
+                    />
+                  </div>
+
+                  {/* NEW: File List Display */}
+                  {directFiles.length > 0 && (
+                    <div className="flex flex-wrap gap-2 p-2 bg-rose-50 rounded-md border border-rose-100">
+                      {directFiles.map((file, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center bg-white px-3 py-1 rounded-full text-xs border border-rose-200 shadow-sm"
+                        >
+                          <i className="fa-solid fa-file-circle-check text-rose-500 mr-2"></i>
+                          <span className="truncate max-w-[150px] font-medium text-gray-700">
+                            {file.name}
+                          </span>
+                          <button
+                            onClick={() => removeFile(idx)}
+                            className="ml-2 text-gray-400 hover:text-rose-600 transition-colors"
+                          >
+                            <i className="fa-solid fa-xmark"></i>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>

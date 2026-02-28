@@ -1,38 +1,39 @@
+import { useMail } from "@/utils/MailContext";
 import React, { useState } from "react";
 
 // --- MOCKED DEPENDENCIES FOR PREVIEW ---
 // Replaces: import { verifySmtpConfig } from "../../services/emailService";
-const verifySmtpConfig = async (email: string) => {
-  return new Promise<{status: string, error?: string}>((resolve) => {
-    setTimeout(() => {
-      // Mocking an 80% success rate for visualization
-      if (Math.random() > 0.2) resolve({ status: "valid" });
-      else resolve({ status: "invalid", error: "Connection Timeout" });
-    }, 600);
-  });
-};
+// const verifySmtpConfig = async (email: string) => {
+//   return new Promise<{ status: string; error?: string }>((resolve) => {
+//     setTimeout(() => {
+//       // Mocking an 80% success rate for visualization
+//       if (Math.random() > 0.2) resolve({ status: "valid" });
+//       else resolve({ status: "invalid", error: "Connection Timeout" });
+//     }, 600);
+//   });
+// };
 
 // Replaces: import { useMail } from "@/utils/MailContext";
-const useMail = () => {
-  const [senders] = useState<any[]>([
-    { email: "node1@secure.local", host: "smtp.secure.local", port: 587, username: "user1", password: "pwd" },
-    { email: "node2@secure.local", host: "smtp.secure.local", port: 587, username: "user2", password: "pwd" },
-    { email: "deadnode@secure.local", host: "smtp.bad.local", port: 465, username: "user3", password: "pwd" },
-    { email: "node4@relay.net", host: "smtp.relay.net", port: 587, username: "user4", password: "pwd" },
-    { email: "node5@relay.net", host: "smtp.relay.net", port: 587, username: "user5", password: "pwd" },
-    { email: "node6@relay.net", host: "smtp.relay.net", port: 587, username: "user6", password: "pwd" },
-    { email: "node7@relay.net", host: "smtp.relay.net", port: 587, username: "user7", password: "pwd" },
-    { email: "node8@relay.net", host: "smtp.relay.net", port: 587, username: "user8", password: "pwd" },
-    { email: "node9@relay.net", host: "smtp.relay.net", port: 587, username: "user9", password: "pwd" },
-    { email: "node10@relay.net", host: "smtp.relay.net", port: 587, username: "user10", password: "pwd" },
-    { email: "node11@relay.net", host: "smtp.relay.net", port: 587, username: "user11", password: "pwd" },
-    { email: "node12@relay.net", host: "smtp.relay.net", port: 587, username: "user12", password: "pwd" },
-  ]);
-  return {
-    addLog: (msg: string, type: string) => console.log(`[${type}] ${msg}`),
-    senders
-  };
-};
+// const useMail = () => {
+//   const [senders] = useState<any[]>([
+//     { email: "node1@secure.local", host: "smtp.secure.local", port: 587, username: "user1", password: "pwd" },
+//     { email: "node2@secure.local", host: "smtp.secure.local", port: 587, username: "user2", password: "pwd" },
+//     { email: "deadnode@secure.local", host: "smtp.bad.local", port: 465, username: "user3", password: "pwd" },
+//     { email: "node4@relay.net", host: "smtp.relay.net", port: 587, username: "user4", password: "pwd" },
+//     { email: "node5@relay.net", host: "smtp.relay.net", port: 587, username: "user5", password: "pwd" },
+//     { email: "node6@relay.net", host: "smtp.relay.net", port: 587, username: "user6", password: "pwd" },
+//     { email: "node7@relay.net", host: "smtp.relay.net", port: 587, username: "user7", password: "pwd" },
+//     { email: "node8@relay.net", host: "smtp.relay.net", port: 587, username: "user8", password: "pwd" },
+//     { email: "node9@relay.net", host: "smtp.relay.net", port: 587, username: "user9", password: "pwd" },
+//     { email: "node10@relay.net", host: "smtp.relay.net", port: 587, username: "user10", password: "pwd" },
+//     { email: "node11@relay.net", host: "smtp.relay.net", port: 587, username: "user11", password: "pwd" },
+//     { email: "node12@relay.net", host: "smtp.relay.net", port: 587, username: "user12", password: "pwd" },
+//   ]);
+//   return {
+//     addLog: (msg: string, type: string) => console.log(`[${type}] ${msg}`),
+//     senders
+//   };
+// };
 
 // --- Types ---
 interface VerificationResult {
@@ -41,64 +42,103 @@ interface VerificationResult {
 }
 
 interface SmtpVerifierProps {
-  senders: { email: string; host?: string; port?: string | number; username?: string; password?: string; [key: string]: any }[];
+  senders: {
+    email: string;
+    host?: string;
+    port?: string | number;
+    username?: string;
+    password?: string;
+    [key: string]: any;
+  }[];
   addLog: (
     message: string,
     type: "success" | "error" | "info" | "warning",
   ) => void;
 }
 
-const SmtpVerifierComponent: React.FC<SmtpVerifierProps> = ({
-  senders,
-  addLog,
-}) => {
+const SmtpVerifierComponent: React.FC<SmtpVerifierProps> = ({ addLog }) => {
   const [verifying, setVerifying] = useState<boolean>(false);
   const [results, setResults] = useState<Record<string, VerificationResult>>(
     {},
   );
+  const {
+    receivers,
+    logs,
+    setLogs,
+    senders,
+
+    setThroughput,
+    setBackendLogs,
+    senderFile,
+    receiverFile,
+    templateFile,
+    htmlTemplate,
+    recMode,
+    throughput,
+    smtpType,
+    sendLimit,
+    manualText,
+    setTemplateFile,
+    setManualText,
+    deliveryFormat,
+    setDeliveryFormat,
+    setSmtpType,
+    htmlMode,
+    setHtmlMode,
+    setSenderFile,
+    setReceiverFile,
+    setRecMode,
+    sendersCount,
+    setHtmlTemplate,
+
+    setSendLimit,
+  } = useMail();
 
   const runVerification = async () => {
     if (!senders || senders.length === 0) return;
     setVerifying(true);
     addLog("Starting SMTP node verification...", "info");
+    const res = await verifySmtpConfig(senders);
 
     // Process nodes sequentially
-    for (const sender of senders) {
-      try {
-        const res = await verifySmtpConfig(sender.email);
+    // for (const sender of senders) {
+    //   try {
+    //     const res = await verifySmtpConfig(senders);
 
-        const status: "valid" | "invalid" =
-          res.status === "valid" ? "valid" : "invalid";
-        const msg: string =
-          res.status === "valid" ? "Connected" : res.error || "Failed";
+    //     const status: "valid" | "invalid" =
+    //       res.status === "valid" ? "valid" : "invalid";
+    //     const msg: string =
+    //       res.status === "valid" ? "Connected" : res.error || "Failed";
 
-        setResults((prev) => ({
-          ...prev,
-          [sender.email]: { status, msg },
-        }));
+    //     setResults((prev) => ({
+    //       ...prev,
+    //       [sender.email]: { status, msg },
+    //     }));
 
-        if (status === "valid") {
-          addLog(`Node Verified: ${sender.email} is active.`, "success");
-        } else {
-          addLog(`Node Failed: ${sender.email} - ${msg}`, "error");
-        }
-      } catch (err) {
-        setResults((prev) => ({
-          ...prev,
-          [sender.email]: { status: "invalid", msg: "Network Error" },
-        }));
-      }
+    //     if (status === "valid") {
+    //       addLog(`Node Verified: ${sender.email} is active.`, "success");
+    //     } else {
+    //       addLog(`Node Failed: ${sender.email} - ${msg}`, "error");
+    //     }
+    //   } catch (err) {
+    //     setResults((prev) => ({
+    //       ...prev,
+    //       [sender.email]: { status: "invalid", msg: "Network Error" },
+    //     }));
+    //   }
 
-      // Delay to avoid overwhelming local network/sockets
-      await new Promise((r) => setTimeout(r, 800));
-    }
+    //   // Delay to avoid overwhelming local network/sockets
+    //   await new Promise((r) => setTimeout(r, 800));
+    // }
     setVerifying(false);
     addLog("SMTP verification complete.", "info");
   };
 
   // --- CSV Download Logic for SMTP Senders ---
   const downloadValidCSV = () => {
-    const validSenders = senders.filter((s) => results[s.email]?.status === "valid");
+    const validSenders = senders.filter(
+      (s) => results[s.email]?.status === "valid",
+    );
     if (validSenders.length === 0) return;
 
     // We include standard SMTP config headers
@@ -110,18 +150,19 @@ const SmtpVerifierComponent: React.FC<SmtpVerifierProps> = ({
       const port = `"${s.port || ""}"`;
       const user = `"${(s.username || "").replace(/"/g, '""')}"`;
       const pass = `"${(s.password || "").replace(/"/g, '""')}"`;
-      
+
       csvRows.push(`${email},${host},${port},${user},${pass}`);
     });
 
-    const csvContent = "data:text/csv;charset=utf-8," + encodeURIComponent(csvRows.join("\n"));
+    const csvContent =
+      "data:text/csv;charset=utf-8," + encodeURIComponent(csvRows.join("\n"));
     const link = document.createElement("a");
     link.setAttribute("href", csvContent);
     link.setAttribute("download", "valid_smtp_nodes.csv");
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    
+
     addLog("Valid SMTP nodes downloaded as CSV.", "success");
   };
 
@@ -138,7 +179,7 @@ const SmtpVerifierComponent: React.FC<SmtpVerifierProps> = ({
       <div className="flex justify-between items-center mb-8">
         <div>
           <h2 className="text-2xl font-black uppercase text-white tracking-tighter flex items-center gap-3">
-             <i className="fas fa-server text-indigo-500"></i> SMTP Verifier
+            <i className="fas fa-server text-indigo-500"></i> SMTP Verifier
           </h2>
           <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">
             Validate active relay nodes
@@ -177,7 +218,7 @@ const SmtpVerifierComponent: React.FC<SmtpVerifierProps> = ({
           </span>
           <span className="text-xl text-white font-black">{invalidCount}</span>
         </div>
-        
+
         {/* --- CSV Download Button --- */}
         {validCount > 0 && (
           <button
@@ -240,7 +281,8 @@ const SmtpVerifierComponent: React.FC<SmtpVerifierProps> = ({
                       {sender.email}
                     </p>
                     <p className="text-[10px] font-mono text-slate-500">
-                      Host: {sender.host || "Unknown"} | Port: {sender.port || "Unknown"}
+                      Host: {sender.host || "Unknown"} | Port:{" "}
+                      {sender.port || "Unknown"}
                     </p>
                   </div>
                 </div>

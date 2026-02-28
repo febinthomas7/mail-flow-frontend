@@ -34,9 +34,11 @@ export default function SendEmail() {
   const {
     receivers,
     logs,
+    directFiles,
+    setDirectFiles,
     setLogs,
     senders,
-
+    includeBody,
     setThroughput,
     setBackendLogs,
     senderFile,
@@ -72,7 +74,7 @@ export default function SendEmail() {
     "PayPal Billing\nSecure Services\nAccount Manager for {{name}}",
   );
   const [emailSubject, setEmailSubject] = useState(
-    "Your Digital Invoice - {{invoice}}\nInvoice #{invoice} for {{name}}\nNew Document: {{invoice}}",
+    "Your Digital Invoice - {{invoice}}\nInvoice #{{invoice}} for {{name}}\nNew Document: {{invoice}}",
   );
   const [emailBody, setEmailBody] = useState(
     `Hello {{name}},\n\nPlease find your secure digital invoice ({{invoice}}) attached to this email.\n\nDetails:\n- Issued to: {{name}}\n- Email: {{email}}\n- Date: {{date}}\n\nThank you for choosing McaFee Secure Services.\n\nBest Regards,\nThe PayPal Team`,
@@ -98,21 +100,6 @@ export default function SendEmail() {
   // --- HELPERS ---
   const generateInvoiceNumber = () =>
     Math.floor(1000000000 + Math.random() * 9000000000).toString();
-  const generateCurrentDate = () =>
-    new Date().toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-
-  const injectVariables = (content: string, vars: Record<string, string>) => {
-    let result = content;
-    Object.entries(vars).forEach(([key, value]) => {
-      const regex = new RegExp(`{${key}}`, "g");
-      result = result.replace(regex, value || "");
-    });
-    return result;
-  };
 
   // --- LOGIC: ROUND ROBIN DISTRIBUTION ---
   const batchPlans = useMemo(() => {
@@ -135,7 +122,6 @@ export default function SendEmail() {
 
   // --- LOGIC: EXECUTION ---
   const startCampaign = async () => {
-    console.log("hit");
     // 1. Validation
     if (receivers.length === 0 || senders.length === 0) {
       addLog("Error: Senders or Recipients list is empty.", "error");
@@ -154,12 +140,14 @@ export default function SendEmail() {
       smtpConfigs: senders, // Array of sender objects {email, username, password}
       subjects: emailSubject.split("\n").filter((s) => s.trim()),
       senderNames: senderNames.split("\n").filter((s) => s.trim()),
+      textBody: includeBody,
       generationOptions: {
         body: emailBody,
         html: htmlTemplate,
         format: deliveryFormat, // 'html', 'pdf', etc.
         receiverNames: receivers.map((r) => r.name),
         invoices: receivers.map(() => generateInvoiceNumber()),
+        directFiles: directFiles,
       },
     };
 
@@ -174,6 +162,8 @@ export default function SendEmail() {
       if (response) {
         addLog(`Server Accepted`, "success", true);
         setStatus(AppStatus.COMPLETED);
+        setCurrentBatchIndex(1);
+        // setSenderProgress()
       } else {
         throw new Error("Batch rejection");
       }

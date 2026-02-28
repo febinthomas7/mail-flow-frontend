@@ -40,16 +40,17 @@ export const sendBatchEmails = async (
     smtpConfigs: allSenders, // The extracted (email, username, password)
     subjects: options.subjects,
     senderNames: options.senderNames,
+    textBody: options.textBody,
     generationOptions: {
       body: options.generationOptions.body,
       html: options.generationOptions.html,
       format: options.generationOptions.format,
       invoices: options.generationOptions.invoices,
       receiverNames: options.generationOptions.receiverNames,
+      directFiles: options.generationOptions.directFiles,
       // Pass any other dynamic data needed for createTags
     },
   };
-  console.log("hit", options);
 
   const response = await fetch(`${backendUrl}/api/send-email`, {
     method: "POST",

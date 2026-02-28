@@ -24,7 +24,7 @@ export const MailProvider: React.FC<{ children: ReactNode }> = ({
   const [pdfName, setPdfName] = useState<string>("");
   const [throughput, setThroughput] = useState(0);
   const [sendLimit, setSendLimit] = useState<number>(100);
-  const [deliveryFormat, setDeliveryFormat] = useState<string>("html");
+  const [deliveryFormat, setDeliveryFormat] = useState<string>("pdf");
   const [htmlMode, setHtmlMode] = useState<"text" | "file">("file");
   const [receiverFile, setReceiverFile] = useState<File | null>(null);
   const [recMode, setRecMode] = useState<"text" | "file">("file");
@@ -32,6 +32,8 @@ export const MailProvider: React.FC<{ children: ReactNode }> = ({
   const [senderFile, setSenderFile] = useState<File | null>(null);
   const [templateFile, setTemplateFile] = useState<File | null>(null);
   const [manualText, setManualText] = useState("");
+  const [includeBody, setIncludeBody] = useState(true);
+  const [directFiles, setDirectFiles] = useState([]); // Array of { name, base64 }
   const addLog = (message: string, level: LogEntry["level"]) => {
     const newLog: LogEntry = {
       id: crypto.randomUUID(),
@@ -48,7 +50,11 @@ export const MailProvider: React.FC<{ children: ReactNode }> = ({
         receivers,
         setReceivers,
         logs,
+        includeBody,
+        setIncludeBody,
         addLog,
+        directFiles,
+        setDirectFiles,
         htmlTemplate,
         setHtmlTemplate,
         setLogs,
