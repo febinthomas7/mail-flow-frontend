@@ -29,7 +29,11 @@ export interface LogEntry {
 }
 const backendUrl = import.meta.env.VITE_BASE_URL;
 
-const socket = io(backendUrl);
+const socket = io(backendUrl, {
+  transports: ["polling"], // CRITICAL: Netlify proxies only support polling
+  withCredentials: true,
+  reconnectionAttempts: 10,
+});
 const uuidv4 = () => crypto.randomUUID();
 
 export default function SendEmail() {

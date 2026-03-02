@@ -1,3 +1,11 @@
+
+# 1. Socket.io default path proxy
+[[redirects]]
+  from = "/socket.io/*"
+  to = "http://3.227.232.137:3001/socket.io/:splat"
+  status = 200
+  force = true
+
 # 1. API Proxy - This MUST come first
 [[redirects]]
   from = "/api/*"
