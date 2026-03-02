@@ -1,4 +1,18 @@
+# 1. API Proxy - This MUST come first
 [[redirects]]
-from ="/*"
-to = "/index.html"
-status = 200
+  from = "/api/*"
+  to = "http://3.227.232.137:3001/api/:splat"
+  status = 200
+  force = true
+
+# 2. Single Page App (SPA) Fix - This MUST come last
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Access-Control-Allow-Credentials = "true"
+    Access-Control-Allow-Origin = "https://maillflow.netlify.app"
