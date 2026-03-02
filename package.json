@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "sed -i \"s|BACKEND_URL_PLACEHOLDER|$VITE_BACKEND_URL_PLACEHOLDER|g\" netlify.toml",
     "build": "vite build",
     "preview": "vite preview"
   },
