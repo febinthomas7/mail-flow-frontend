@@ -1,5 +1,11 @@
-import React, { createContext, useContext, useState, ReactNode } from "react";
-import { Receiver, LogEntry } from "../types"; // Adjust path to your types file
+import React, {
+  createContext,
+  useContext,
+  useState,
+  ReactNode,
+  useCallback,
+} from "react";
+import { Receiver, LogEntry, Sender } from "../types"; // Adjust path to your types file
 
 interface MailContextType {
   receivers: Receiver[];
@@ -34,26 +40,36 @@ export const MailProvider: React.FC<{ children: ReactNode }> = ({
   const [manualText, setManualText] = useState("");
   const [includeBody, setIncludeBody] = useState(true);
   const [directFiles, setDirectFiles] = useState([]); // Array of { name, base64 }
-  const addLog = (message: string, level: LogEntry["level"]) => {
-    const newLog: LogEntry = {
-      id: crypto.randomUUID(),
-      timestamp: new Date().toISOString(),
-      message,
-      level,
-    };
-    setLogs((prev) => [newLog, ...prev].slice(0, 100)); // Keep last 100 logs
-  };
+  // const addLog = (message: string, level: LogEntry["level"]) => {
+  // const newLog: LogEntry = {
+  //   id: crypto.randomUUID(),
+  //   timestamp: new Date().toISOString(),
+  //   message,
+  //   level,
+  // };
+  // setLogs((prev) => [newLog, ...prev].slice(0, 100)); // Keep last 100 logs
+  // };
+  const uuidv4 = () => crypto.randomUUID();
+
+  const addLog = useCallback(
+    (message: string, level: LogEntry["level"] = "info", isBackend = false) => {
+      const newLog = { id: uuidv4(), timestamp: new Date(), level, message };
+      if (isBackend) {
+        setBackendLogs((prev: any) => [newLog, ...prev].slice(0, 50));
+      }
+    },
+    [setBackendLogs],
+  );
 
   return (
     <MailContext.Provider
       value={{
         receivers,
+        addLog,
         setReceivers,
         logs,
         includeBody,
         setIncludeBody,
-        addLog,
-        directFiles,
         setDirectFiles,
         htmlTemplate,
         setHtmlTemplate,
@@ -63,6 +79,7 @@ export const MailProvider: React.FC<{ children: ReactNode }> = ({
         senders,
         setSenders,
         backendLogs,
+        directFiles,
         setBackendLogs,
         pdfName,
         setPdfName,

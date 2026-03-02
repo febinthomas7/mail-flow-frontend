@@ -1,38 +1,20 @@
+import { verifyTargetEmail } from "@/services/emailService";
+import { useMail } from "@/utils/MailContext";
 import React, { useState } from "react";
 
 // --- MOCKED DEPENDENCIES FOR PREVIEW ---
 // Replaces: import { verifyTargetEmail } from "../../services/emailService";
-const verifyTargetEmail = async (email: string) => {
-  return new Promise<{status: string, error?: string}>((resolve) => {
-    setTimeout(() => {
-      // Mocking an 80% success rate for visualization
-      if (Math.random() > 0.2) resolve({ status: "valid" });
-      else resolve({ status: "invalid", error: "Mailbox not found" });
-    }, 400);
-  });
-};
+// const verifyTargetEmail = async (email: string) => {
+//   return new Promise<{status: string, error?: string}>((resolve) => {
+//     setTimeout(() => {
+//       // Mocking an 80% success rate for visualization
+//       if (Math.random() > 0.2) resolve({ status: "valid" });
+//       else resolve({ status: "invalid", error: "Mailbox not found" });
+//     }, 400);
+//   });
+// };
 
 // Replaces: import { useMail } from "@/utils/MailContext";
-const useMail = () => {
-  const [receivers] = useState<any[]>([
-    { email: "demo1@secure.local", name: "Demo 1" },
-    { email: "demo2@secure.local", name: "Demo 2" },
-    { email: "invalid@bounce.local", name: "Bouncer" },
-    { email: "client4@domain.com", name: "Client 4" },
-    { email: "client5@domain.com", name: "Client 5" },
-    { email: "client6@domain.com", name: "Client 6" },
-    { email: "client7@domain.com", name: "Client 7" },
-    { email: "client8@domain.com", name: "Client 8" },
-    { email: "client9@domain.com", name: "Client 9" },
-    { email: "client10@domain.com", name: "Client 10" },
-    { email: "client11@domain.com", name: "Client 11" },
-    { email: "client12@domain.com", name: "Client 12" },
-  ]);
-  return {
-    addLog: (msg: string, type: string) => console.log(`[${type}] ${msg}`),
-    receivers
-  };
-};
 
 // --- Types ---
 interface VerificationResult {
@@ -61,47 +43,44 @@ const TargetVerifierComponent: React.FC<TargetVerifierProps> = ({
 
   const runVerification = async () => {
     if (!emails || emails.length === 0) return;
+
     setVerifying(true);
-    addLog("Starting target email verification...", "info");
+    addLog(
+      `Batching ${emails.length} targets for server-side verification...`,
+      "info",
+    );
 
-    // Process one by one to avoid rate limits
-    for (const email of emails) {
-      try {
-        const res = await verifyTargetEmail(email.email);
+    const data = await verifyTargetEmail(emails);
 
-        // Determine status based on backend response
-        const status: "valid" | "invalid" =
-          res.status === "valid" ? "valid" : "invalid";
-        const msg: string =
-          res.status === "valid" ? "Deliverable" : res.error || "Unknown";
+    if (data.success) {
+      const newResults: Record<string, VerificationResult> = {};
 
-        setResults((prev) => ({
-          ...prev,
-          [email.email]: { status, msg },
-        }));
+      // Map the array of results back to your State object
+      data.results.forEach((res: any) => {
+        newResults[res.email] = {
+          status: res.status, // "valid" | "invalid"
+          msg: res.status === "valid" ? "Deliverable" : res.error || "Rejected",
+        };
+      });
 
-        if (status === "valid") {
-          addLog(`Target Verified: ${email.email} is Valid.`, "success");
-        } else {
-          addLog(`Target Failed: ${email.email} - ${msg}`, "error");
-        }
-      } catch (err) {
-        setResults((prev) => ({
-          ...prev,
-          [email.email]: { status: "invalid", msg: "Network Error" },
-        }));
-      }
+      setResults(newResults);
 
-      // 1 second delay to be polite to target servers
-      await new Promise((r) => setTimeout(r, 600));
+      addLog(
+        `Batch complete: ${data.results.filter((r: any) => r.status === "valid").length} valid targets found.`,
+        "success",
+      );
+    } else {
+      addLog(`Batch verification failed: ${data.error}`, "error");
     }
+
     setVerifying(false);
-    addLog("Target verification complete.", "info");
   };
 
   // --- NEW: CSV Download Logic ---
   const downloadValidCSV = () => {
-    const validEmails = emails.filter((e) => results[e.email]?.status === "valid");
+    const validEmails = emails.filter(
+      (e) => results[e.email]?.status === "valid",
+    );
     if (validEmails.length === 0) return;
 
     const csvRows = ["Email,Name"];
@@ -111,14 +90,15 @@ const TargetVerifierComponent: React.FC<TargetVerifierProps> = ({
       csvRows.push(`${e.email},${safeName}`);
     });
 
-    const csvContent = "data:text/csv;charset=utf-8," + encodeURIComponent(csvRows.join("\n"));
+    const csvContent =
+      "data:text/csv;charset=utf-8," + encodeURIComponent(csvRows.join("\n"));
     const link = document.createElement("a");
     link.setAttribute("href", csvContent);
     link.setAttribute("download", "valid_targets.csv");
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    
+
     addLog("Valid emails downloaded as CSV.", "success");
   };
 
@@ -130,12 +110,12 @@ const TargetVerifierComponent: React.FC<TargetVerifierProps> = ({
   ).length;
 
   return (
-    <div className="glass rounded-[3.5rem] p-10 min-h-[750px] shadow-2xl flex flex-col relative border-white/5 overflow-hidden">
+    <div className="glass rounded-[3.5rem] p-10  shadow-2xl flex flex-col relative border-white/5 overflow-hidden">
       {/* Header */}
       <div className="flex justify-between items-center mb-8">
         <div>
           <h2 className="text-2xl font-black uppercase text-white tracking-tighter flex items-center gap-3">
-             <i className="fas fa-bullseye text-blue-500"></i> Target Validator
+            <i className="fas fa-bullseye text-blue-500"></i> Target Validator
           </h2>
           <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">
             Clean your email list
@@ -145,7 +125,7 @@ const TargetVerifierComponent: React.FC<TargetVerifierProps> = ({
           onClick={runVerification}
           disabled={verifying || !emails || emails.length === 0}
           className={`px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${
-            verifying
+            verifying || !emails || emails.length === 0
               ? "bg-slate-800 text-slate-500 cursor-not-allowed"
               : "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20"
           }`}
@@ -188,77 +168,34 @@ const TargetVerifierComponent: React.FC<TargetVerifierProps> = ({
         )}
       </div>
 
-      {/* Email List - Added max-h-[550px] for scroll */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 pr-2 max-h-[550px]">
+      {/* Email Status Summary */}
+      <div className="flex-1 p-6 rounded-2xl border border-slate-800 bg-slate-900/40">
         {!emails || emails.length === 0 ? (
-          <div className="text-center py-20 opacity-30">
-            <i className="fas fa-envelope-open-text text-6xl mb-4 text-slate-500"></i>
-            <p className="font-bold uppercase text-slate-400">
+          /* State: No Emails */
+          <div className="text-center py-10 opacity-30">
+            <i className="fas fa-envelope-open-text text-5xl mb-4 text-slate-500"></i>
+            <p className="font-bold uppercase tracking-wider text-slate-400">
               No Emails to Check
             </p>
           </div>
         ) : (
-          emails?.map((email, index) => {
-            const result = results[email.email];
+          /* State: Has Emails */
+          <div className="flex flex-col items-center justify-center py-10 text-center">
+            <div className="w-16 h-16 bg-blue-500/10 rounded-full flex items-center justify-center mb-4 border border-blue-500/20">
+              <i className="fas fa-list-ol text-blue-400 text-2xl"></i>
+            </div>
+            <h3 className="text-2xl font-black text-white">{emails.length}</h3>
+            <p className="text-slate-400 font-medium uppercase text-xs tracking-widest mt-1">
+              Emails Loaded & Ready
+            </p>
 
-            return (
-              <div
-                key={index}
-                className={`p-4 rounded-2xl border flex items-center justify-between transition-all ${
-                  result?.status === "valid"
-                    ? "bg-blue-500/5 border-blue-500/30"
-                    : result?.status === "invalid"
-                      ? "bg-rose-500/5 border-rose-500/30"
-                      : "bg-slate-900/40 border-slate-800"
-                }`}
-              >
-                <div className="flex items-center gap-4">
-                  <div
-                    className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                      result?.status === "valid"
-                        ? "bg-blue-500 text-white shadow-blue-500/20"
-                        : result?.status === "invalid"
-                          ? "bg-rose-500 text-white shadow-rose-500/20"
-                          : "bg-slate-800 text-slate-500"
-                    }`}
-                  >
-                    <i
-                      className={`fas ${
-                        result?.status === "valid"
-                          ? "fa-check"
-                          : result?.status === "invalid"
-                            ? "fa-ban"
-                            : "fa-search"
-                      }`}
-                    ></i>
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-white">
-                      {email.email}
-                    </p>
-                    <p className="text-[10px] font-mono text-slate-500">
-                      {/* Extract domain for display */}
-                      {email.email.split("@")[1] || "Unknown Domain"}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="text-right">
-                  <span
-                    className={`text-[10px] font-black uppercase px-2 py-1 rounded-md ${
-                      result?.status === "valid"
-                        ? "bg-blue-500/20 text-blue-400"
-                        : result?.status === "invalid"
-                          ? "bg-rose-500/20 text-rose-400"
-                          : "bg-slate-800 text-slate-600"
-                    }`}
-                  >
-                    {result?.msg || "Queued"}
-                  </span>
-                </div>
-              </div>
-            );
-          })
+            {/* Optional: Tiny progress indicator if processing is active */}
+            {Object.keys(results).length > 0 && (
+              <p className="mt-4 text-[10px] text-slate-500 font-mono italic">
+                Checked {Object.keys(results).length} of {emails.length}
+              </p>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -268,7 +205,7 @@ const TargetVerifierComponent: React.FC<TargetVerifierProps> = ({
 export default function TargetVerifier() {
   const { addLog, receivers } = useMail();
   return (
-    <div className="bg-[#020617] min-h-screen p-4 md:p-10 font-sans">
+    <div className="bg-[#020617] min-h-screen  font-sans">
       <TargetVerifierComponent emails={receivers} addLog={addLog} />
     </div>
   );

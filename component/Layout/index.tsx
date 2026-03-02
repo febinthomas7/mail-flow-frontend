@@ -1,7 +1,9 @@
 import { useMail } from "@/utils/MailContext";
+// import { LogOut } from "lucide-react";
 import React, { useState, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import * as XLSX from "xlsx";
+import WorldClocks from "../WorldClock";
 // --- COMPONENT: STAT CARD ---
 const StatCard = ({ title, value, icon, color, subValue }: any) => (
   <div className="glass p-5 rounded-2xl flex items-center gap-4 flex-1 border-slate-800/50 hover:border-slate-700 transition-all group">
@@ -109,6 +111,7 @@ export default function Layout({ children }: any) {
     includeBody,
     setIncludeBody,
     senderFile,
+    backendLogs,
     senders,
     setSenders, // Added from context
     receiverFile,
@@ -118,6 +121,7 @@ export default function Layout({ children }: any) {
     htmlTemplate,
     directFiles,
     recMode,
+    addLog,
     throughput,
     smtpType,
     sendLimit,
@@ -194,11 +198,49 @@ export default function Layout({ children }: any) {
       else if (file.name.endsWith(".json")) {
         try {
           const jsonData = JSON.parse(data as string);
-          const finalData = Array.isArray(jsonData) ? jsonData : [jsonData];
-          if (type === "sender") setSenders(finalData);
-          if (type === "receiver") setReceivers(finalData);
+          const rawArray = Array.isArray(jsonData) ? jsonData : [jsonData];
+
+          if (type === "sender") {
+            // Check if every object has the required keys for a sender
+            const validSenders = rawArray.filter(
+              (item) => "username" in item && "password" in item,
+            );
+
+            if (validSenders.length > 0) {
+              setSenders(validSenders);
+              addLog(
+                `Imported ${validSenders.length} Senders (Keys: username, password)`,
+                "info",
+                true,
+              );
+            } else {
+              addLog(
+                "Error: Senders must have  'username', and 'password' keys.",
+                "error",
+                true,
+              );
+            }
+          } else if (type === "receiver") {
+            // Check if every object has the 'email' key
+            const validReceivers = rawArray.filter((item) => "email" in item);
+
+            if (validReceivers.length > 0) {
+              setReceivers(validReceivers);
+              addLog(
+                `Imported ${validReceivers.length} Receivers (Key: email)`,
+                "info",
+                true,
+              );
+            } else {
+              addLog(
+                "Error: Receivers must have an 'email' key.",
+                "error",
+                true,
+              );
+            }
+          }
         } catch (err) {
-          console.error("JSON Error:", err);
+          addLog("JSON Parse Error: File is not a valid JSON", "error", true);
         }
       }
 
@@ -242,9 +284,15 @@ export default function Layout({ children }: any) {
         .filter((s) => s !== "").length,
     [manualText],
   );
+  const LogOut = () => {
+    localStorage.clear();
+
+    window.location.href = "/";
+  };
 
   // UPDATED: Now shows actual counts from the parsed data arrays
   const sendersCount = senders?.length || 0;
+  const directFilesCount = directFiles?.length || 0;
   const receiversCount =
     recMode === "text" ? manualReceiversCount : receivers?.length || 0;
 
@@ -262,7 +310,7 @@ export default function Layout({ children }: any) {
         <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
           <div className="flex items-center gap-6">
             <button
-              onClick={() => alert("Logout clicked")}
+              onClick={LogOut}
               className="bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border border-rose-500/20 shadow-lg"
             >
               <i className="fas fa-sign-out-alt md:mr-2"></i>
@@ -320,11 +368,11 @@ export default function Layout({ children }: any) {
             subValue={recMode === "text" ? "Manual Targets" : "Parsed Targets"}
           />
           <StatCard
-            title="VELOCITY"
-            value={`${throughput} m/m`}
-            icon="fa-bolt"
+            title="DIRECT FILES"
+            value={directFilesCount}
+            icon="fa-file"
             color="bg-amber-500/10 text-amber-400"
-            subValue="Flow Rate"
+            subValue="FILES"
           />
           <StatCard
             title="BATCH LIMIT"
@@ -393,7 +441,7 @@ export default function Layout({ children }: any) {
                   htmlFor="textbody-toggle"
                   className="text-sm font-medium text-gray-700 cursor-pointer"
                 >
-                  Include a personalized message in the email body
+                  Include a personalized text message in the email body
                 </label>
               </div>
 
@@ -520,8 +568,8 @@ export default function Layout({ children }: any) {
                     <FileDropZone
                       id="dir-file"
                       label="4. Add Direct files"
-                      icon="fa-file-medical"
-                      color="rose"
+                      icon="fa-file-text"
+                      color="indigo"
                       onFile={(file: File) =>
                         handleFileProcessForDirFiles(file)
                       }
@@ -529,7 +577,7 @@ export default function Layout({ children }: any) {
                       fileName={
                         directFiles.length > 0
                           ? `${directFiles.length} files selected`
-                          : "No files selected"
+                          : ""
                       }
                       count={directFiles.length}
                     />
@@ -560,21 +608,43 @@ export default function Layout({ children }: any) {
                 </div>
               </div>
             </div>
-
-            <div className="glass p-8 rounded-[2.5rem] bg-black/20 border-white/5">
-              <h3 className="text-[10px] font-black uppercase text-indigo-400 mb-6 flex items-center justify-between">
-                <span>Relay Logs</span>
-                <i className="fas fa-terminal opacity-50"></i>
-              </h3>
-              <div className="bg-black/95 rounded-2xl p-5 h-64 font-mono text-[9px] overflow-y-auto custom-scrollbar border border-slate-800/50 shadow-inner">
-                <div className="text-slate-800 flex items-center justify-center h-full italic select-none">
-                  Ready for sequence start...
-                </div>
-              </div>
-            </div>
           </div>
 
           <div className="lg:col-span-8 space-y-8">
+            <div className="flex w-full gap-3">
+              <WorldClocks />
+              <div className="bg-black/95 rounded-2xl p-5 w-full font-mono text-[9px] overflow-y-auto custom-scrollbar border border-slate-800/50 shadow-inner">
+                {backendLogs.length === 0 ? (
+                  <div className="text-slate-800 flex items-center justify-center h-full italic select-none">
+                    Ready for sequence start...
+                  </div>
+                ) : (
+                  backendLogs.map((log) => (
+                    <div
+                      key={log.id}
+                      className="mb-1 flex gap-2 animate-in fade-in slide-in-from-left-1 duration-300"
+                    >
+                      <span className="text-slate-500">
+                        [{log.timestamp.toLocaleTimeString()}]
+                      </span>
+                      <span
+                        className={
+                          log.level === "error"
+                            ? "text-red-400"
+                            : log.level === "warn"
+                              ? "text-yellow-400"
+                              : "text-emerald-400"
+                        }
+                      >
+                        {log.level.toUpperCase()}:
+                      </span>
+                      <span className="text-slate-300">{log.message}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
             {children ? (
               children
             ) : (

@@ -55,6 +55,7 @@ export const sendBatchEmails = async (
   const response = await fetch(`${backendUrl}/api/send-email`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify(requestBody),
   });
 
@@ -70,23 +71,29 @@ export const sendBatchEmails = async (
   }
 };
 
-export const verifySmtpCredential = async (sender: Sender) => {
+export const verifySmtpBatch = async (senders: Sender[]) => {
   try {
-    const response = await fetch(`${backendUrl}/api/verify-smtp`, {
+    const response = await fetch(`${backendUrl}/api/verify/smtp`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({
-        smtpConfig: {
-          host: sender.host,
-          port: sender.port,
-          username: sender.email || sender.username,
-          password: sender.password,
-        },
+        // Match the key 'configs' that your backend expects
+        configs: senders,
       }),
     });
+
     const data = await response.json();
-    return { success: data.success, error: data.error };
+
+    if (!data.success) {
+      localStorage.clear();
+      window.location.href = "/";
+      return;
+    }
+    // Returns { success: true, results: [{ user, status, error }, ...] }
+    return data;
   } catch (err: any) {
+    console.error("Batch Verify Error:", err);
     return { success: false, error: "Network/Server Error" };
   }
 };
@@ -103,12 +110,20 @@ export const verifyTargetEmail = async (
 ): Promise<VerificationResponse> => {
   try {
     // Ensure port 5000 matches your backend port
-    const response = await fetch(`${backendUrl}/api/verify-target`, {
+    const response = await fetch(`${backendUrl}/api/verify/target`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ email }),
     });
-    return await response.json();
+    const data = await response.json();
+
+    if (!data.success) {
+      localStorage.clear();
+      window.location.href = "/";
+      return;
+    }
+    return data;
   } catch (error: any) {
     return { success: false, error: error.message };
   }

@@ -13,7 +13,7 @@ const router = createBrowserRouter([
   {
     path: "/send-email",
     element: (
-      <PrivateRoute redirectTo="/login">
+      <PrivateRoute redirectTo="/">
         <Layout>
           <SendEmail />
         </Layout>
@@ -23,7 +23,7 @@ const router = createBrowserRouter([
   {
     path: "/verify-email",
     element: (
-      <PrivateRoute redirectTo="/login">
+      <PrivateRoute redirectTo="/">
         <Layout>
           <VerifyEmail />
         </Layout>
@@ -33,7 +33,7 @@ const router = createBrowserRouter([
   {
     path: "/verify-target",
     element: (
-      <PrivateRoute redirectTo="/login">
+      <PrivateRoute redirectTo="/">
         <Layout>
           <TargetVerifier />
         </Layout>

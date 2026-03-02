@@ -1,23 +1,19 @@
+import { handleLogin } from "@/services/loginService";
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const Login = () => {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [userId, setUserId] = useState("");
+  const [userPassword, setUserPassword] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLoginUser = async (e) => {
     e.preventDefault();
-    setError("");
-
-    // 1. Hardcoded Admin Check (from .env)
-    const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL;
-    const ADMIN_PWD = import.meta.env.VITE_ADMIN_PASSWORD;
-
-    // 2. Standard User Login (Backend API)
     try {
-      if (email === ADMIN_EMAIL && password === ADMIN_PWD) {
+      const response = await handleLogin(userId, userPassword);
+
+      if (response.success) {
         localStorage.setItem("isAdminAuthenticated", "true");
         return navigate("/send-email");
       } else {
@@ -41,7 +37,7 @@ const Login = () => {
           </div>
         )}
 
-        <form onSubmit={handleLogin} className="space-y-6 text-gray-700">
+        <form onSubmit={handleLoginUser} className="space-y-6 text-gray-700">
           <div>
             <label className="block text-sm font-medium ">Email Address</label>
             <input
@@ -49,8 +45,8 @@ const Login = () => {
               required
               placeholder="Enter your email"
               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={userId}
+              onChange={(e) => setUserId(e.target.value)}
             />
           </div>
 
@@ -63,8 +59,8 @@ const Login = () => {
               required
               placeholder="Enter your password"
               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              value={userPassword}
+              onChange={(e) => setUserPassword(e.target.value)}
             />
           </div>
 

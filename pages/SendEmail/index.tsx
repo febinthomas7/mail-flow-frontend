@@ -1,7 +1,7 @@
 import { useMail } from "@/utils/MailContext";
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { sendBatchEmails } from "@/services/emailService";
-
+import { io } from "socket.io-client";
 export enum AppStatus {
   IDLE = "IDLE",
   PROCESSING = "PROCESSING",
@@ -27,7 +27,9 @@ export interface LogEntry {
   level: "info" | "warning" | "error" | "success";
   message: string;
 }
+const backendUrl = import.meta.env.VITE_BASE_URL;
 
+const socket = io(backendUrl);
 const uuidv4 = () => crypto.randomUUID();
 
 export default function SendEmail() {
@@ -37,6 +39,7 @@ export default function SendEmail() {
     directFiles,
     setDirectFiles,
     setLogs,
+    addLog,
     senders,
     includeBody,
     setThroughput,
@@ -68,7 +71,11 @@ export default function SendEmail() {
 
   // State: App Flow
   const [status, setStatus] = useState<AppStatus>(AppStatus.IDLE);
-
+  const [progressData, setProgressData] = useState({
+    processed: 0,
+    total: 0,
+    remaining: "0",
+  });
   // State: Content
   const [senderNames, setSenderNames] = useState(
     "PayPal Billing\nSecure Services\nAccount Manager for {{name}}",
@@ -79,23 +86,59 @@ export default function SendEmail() {
   const [emailBody, setEmailBody] = useState(
     `Hello {{name}},\n\nPlease find your secure digital invoice ({{invoice}}) attached to this email.\n\nDetails:\n- Issued to: {{name}}\n- Email: {{email}}\n- Date: {{date}}\n\nThank you for choosing McaFee Secure Services.\n\nBest Regards,\nThe PayPal Team`,
   );
-
+  const [isPaused, setIsPaused] = useState(false);
   // State: Progress Tracking
-  const [currentBatchIndex, setCurrentBatchIndex] = useState(0);
-  const [senderProgress, setSenderProgress] = useState<Record<number, number>>(
-    {},
-  );
+  // const [currentBatchIndex, setCurrentBatchIndex] = useState(0);
+  // const [senderProgress, setSenderProgress] = useState<Record<number, number>>(
+  //   {},
+  // );
+
+  useEffect(() => {
+    socket.on("batch_progress", (data) => {
+      setProgressData(data);
+      // console.log(data);
+
+      // 2. Add to your logs if it's a real-time update
+      if (data.status === "sent") {
+        setStatus(AppStatus.PROCESSING);
+        // You can add logic here to show successful hits
+      }
+
+      if (data.percentage == "100.0") {
+        setStatus(AppStatus.COMPLETED);
+      }
+    });
+
+    return () => {
+      socket.off("batch_progress");
+    };
+  }, []);
+
+  const togglePause = () => {
+    if (isPaused) {
+      socket.emit("resume_dispatch");
+      setIsPaused(false);
+      addLog("▶️ Resuming dispatch...", "info");
+    } else {
+      socket.emit("pause_dispatch");
+      setIsPaused(true);
+      addLog(
+        "⏸️ Pausing dispatch (waiting for current tasks to finish)...",
+        "warning",
+      );
+    }
+  };
 
   // --- LOGGING UTILITY ---
-  const addLog = useCallback(
-    (message: string, level: LogEntry["level"] = "info", isBackend = false) => {
-      const newLog = { id: uuidv4(), timestamp: new Date(), level, message };
-      if (isBackend) {
-        setBackendLogs((prev: any) => [newLog, ...prev].slice(0, 50));
-      }
-    },
-    [setBackendLogs],
-  );
+  // const addLog = useCallback(
+  //   (message: string, level: LogEntry["level"] = "info", isBackend = false) => {
+  //     const newLog = { id: uuidv4(), timestamp: new Date(), level, message };
+  //     if (isBackend) {
+  //       setBackendLogs((prev: any) => [newLog, ...prev].slice(0, 50));
+  //     }
+  //   },
+  //   [setBackendLogs],
+  // );
 
   // --- HELPERS ---
   const generateInvoiceNumber = () =>
@@ -129,6 +172,7 @@ export default function SendEmail() {
     }
 
     setStatus(AppStatus.PROCESSING);
+    // setSenderProgress({}); // Reset progress
     addLog(
       `RELAY: Initializing batch dispatch for ${receivers.length} targets...`,
       "warning",
@@ -161,9 +205,7 @@ export default function SendEmail() {
 
       if (response) {
         addLog(`Server Accepted`, "success", true);
-        setStatus(AppStatus.COMPLETED);
-        setCurrentBatchIndex(1);
-        // setSenderProgress()
+        setStatus(AppStatus.PROCESSING);
       } else {
         throw new Error("Batch rejection");
       }
@@ -278,8 +320,75 @@ export default function SendEmail() {
         </div>
       </div>
 
+      <div className="bg-slate-900/60 border border-white/10 p-6 rounded-[2.5rem] mb-8 shadow-2xl backdrop-blur-xl">
+        <div className="flex justify-between items-end mb-4">
+          <div className="space-y-1">
+            <p className="text-[10px] font-black uppercase text-indigo-400 tracking-[0.2em] flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+              </span>
+              Live Global Stream
+            </p>
+            <p className="text-3xl font-black text-white tracking-tighter">
+              {progressData.processed.toLocaleString()}{" "}
+              <span className="text-slate-600 text-lg">
+                / {progressData.total.toLocaleString()}
+              </span>
+            </p>
+          </div>
+
+          <div className="text-right space-y-1">
+            <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest">
+              Est. Remaining
+            </p>
+            <p className="text-2xl font-black text-indigo-400 tracking-tight">
+              {progressData.remainingMins}{" "}
+              <span className="text-xs text-slate-600">MIN</span>
+            </p>
+          </div>
+        </div>
+
+        {/* THE PROGRESS BAR */}
+        <div className="relative w-full h-3 bg-black/40 rounded-full overflow-hidden border border-white/5 shadow-inner">
+          <div
+            className="absolute top-0 left-0 h-full bg-gradient-to-r from-indigo-600 via-blue-500 to-indigo-400 transition-all duration-700 ease-out rounded-full shadow-[0_0_15px_rgba(79,70,229,0.4)]"
+            style={{ width: `${progressData.percentage}%` }}
+          />
+        </div>
+
+        <div className="flex justify-between mt-3">
+          <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest">
+            Current Target:{" "}
+            <span className="text-slate-400 font-mono">
+              {progressData.lastEmail || "Initializing..."}
+            </span>
+          </p>
+          <p className="text-[9px] font-black text-indigo-500/80 uppercase">
+            {progressData.percentage}% Completed
+          </p>
+        </div>
+        {status === AppStatus.PROCESSING && (
+          <div className="flex gap-4 mt-6">
+            <button
+              onClick={togglePause}
+              className={`flex-1 py-4 rounded-2xl font-black uppercase tracking-widest transition-all border ${
+                isPaused
+                  ? "bg-emerald-600/20 border-emerald-500/50 text-emerald-400 hover:bg-emerald-500 hover:text-white"
+                  : "bg-amber-600/20 border-amber-500/50 text-amber-400 hover:bg-amber-500 hover:text-white"
+              }`}
+            >
+              <i
+                className={`fas ${isPaused ? "fa-play" : "fa-pause"} mr-2`}
+              ></i>
+              {isPaused ? "Continue Dispatch" : "Pause Dispatch"}
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* --- VISUALIZATION QUEUE --- */}
-      {batchPlans?.length === 0 ? (
+      {/* {batchPlans?.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center opacity-10 text-center select-none py-20">
           <i className="fas fa-satellite text-[10rem] mb-8"></i>
           <p className="text-2xl font-black uppercase tracking-[0.4em]">
@@ -367,7 +476,7 @@ export default function SendEmail() {
             );
           })}
         </div>
-      )}
+      )} */}
     </div>
   );
 }
