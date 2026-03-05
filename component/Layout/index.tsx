@@ -1,6 +1,6 @@
 import { useMail } from "@/utils/MailContext";
 // import { LogOut } from "lucide-react";
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Link, Navigate } from "react-router-dom";
 import * as XLSX from "xlsx";
 import WorldClocks from "../WorldClock";
@@ -139,6 +139,8 @@ export default function Layout({ children }: any) {
     setHtmlTemplate,
     setSendLimit,
     setDirectFiles,
+    textReceivers,
+    setTextReceivers,
   } = useMail();
 
   // --- NEW: UNIVERSAL FILE PARSER ---
@@ -276,14 +278,28 @@ export default function Layout({ children }: any) {
   const removeFile = (index: number) => {
     setDirectFiles((prev) => prev.filter((_, i) => i !== index));
   };
-  const manualReceiversCount = useMemo(
-    () =>
-      manualText
-        .split(/[\n,]+/)
-        .map((s) => s.trim())
-        .filter((s) => s !== "").length,
-    [manualText],
-  );
+  // const manualReceiversCount = useMemo(
+  //   () =>
+  //     manualText
+  //       .split(/[\n,]+/)
+  //       .map((s) => s.trim())
+  //       .filter((s) => s !== "").length,
+  //   [manualText],
+  // );
+
+  const targets = useMemo(() => {
+    return manualText
+      ?.split(/[\n,]+/)
+      ?.map((s) => s.trim())
+      ?.filter((s) => s !== "")
+      ?.map((email) => ({ email })); // Wraps each string in an object
+  }, [manualText]);
+
+  useEffect(() => {
+    setTextReceivers(targets);
+  }, [targets]);
+  // To get the count, you can simply use the length of the new array
+  const manualReceiversCount = targets?.length;
   const LogOut = () => {
     localStorage.clear();
 

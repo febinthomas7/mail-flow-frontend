@@ -38,17 +38,12 @@ export const MailProvider: React.FC<{ children: ReactNode }> = ({
   const [senderFile, setSenderFile] = useState<File | null>(null);
   const [templateFile, setTemplateFile] = useState<File | null>(null);
   const [manualText, setManualText] = useState("");
+  const [textReceivers, setTextReceivers] = useState<Receiver[]>([]);
+
   const [includeBody, setIncludeBody] = useState(true);
   const [directFiles, setDirectFiles] = useState([]); // Array of { name, base64 }
-  // const addLog = (message: string, level: LogEntry["level"]) => {
-  // const newLog: LogEntry = {
-  //   id: crypto.randomUUID(),
-  //   timestamp: new Date().toISOString(),
-  //   message,
-  //   level,
-  // };
-  // setLogs((prev) => [newLog, ...prev].slice(0, 100)); // Keep last 100 logs
-  // };
+  const [receiversCount, setReceiverCount] = useState("");
+
   const uuidv4 = () => crypto.randomUUID();
 
   const addLog = useCallback(
@@ -76,9 +71,13 @@ export const MailProvider: React.FC<{ children: ReactNode }> = ({
         setLogs,
         receiverFileName,
         setReceiverFileName,
+        textReceivers,
+        setTextReceivers,
         senders,
         setSenders,
         backendLogs,
+        receiversCount,
+        setReceiverCount,
         directFiles,
         setBackendLogs,
         pdfName,

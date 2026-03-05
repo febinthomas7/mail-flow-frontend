@@ -91,7 +91,7 @@ export default function SmtpVerifier() {
   // --- CSV Download Logic for SMTP Senders ---
   const downloadValidCSV = () => {
     const validSenders = senders.filter(
-      (s) => results[s.email]?.status === "valid",
+      (s) => results[s.username]?.status === "valid",
     );
 
     if (validSenders.length === 0) return;

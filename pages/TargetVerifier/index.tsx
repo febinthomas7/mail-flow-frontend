@@ -2,20 +2,6 @@ import { verifyTargetEmail } from "@/services/emailService";
 import { useMail } from "@/utils/MailContext";
 import React, { useState } from "react";
 
-// --- MOCKED DEPENDENCIES FOR PREVIEW ---
-// Replaces: import { verifyTargetEmail } from "../../services/emailService";
-// const verifyTargetEmail = async (email: string) => {
-//   return new Promise<{status: string, error?: string}>((resolve) => {
-//     setTimeout(() => {
-//       // Mocking an 80% success rate for visualization
-//       if (Math.random() > 0.2) resolve({ status: "valid" });
-//       else resolve({ status: "invalid", error: "Mailbox not found" });
-//     }, 400);
-//   });
-// };
-
-// Replaces: import { useMail } from "@/utils/MailContext";
-
 // --- Types ---
 interface VerificationResult {
   status: "valid" | "invalid";
@@ -31,6 +17,8 @@ interface TargetVerifierProps {
 }
 
 const TargetVerifierComponent: React.FC<TargetVerifierProps> = ({
+  recMode,
+  textEmails,
   emails,
   addLog,
 }) => {
@@ -39,18 +27,23 @@ const TargetVerifierComponent: React.FC<TargetVerifierProps> = ({
     {},
   );
 
-  console.log("TargetVerifierComponent rendered with emails:", emails);
+  // console.log("TargetVerifierComponent rendered with emails:", emails);
 
   const runVerification = async () => {
-    if (!emails || emails.length === 0) return;
+    if (recMode === "text" ? textEmails.length === 0 : emails.length === 0)
+      return;
 
     setVerifying(true);
     addLog(
-      `Batching ${emails.length} targets for server-side verification...`,
+      `Batching ${
+        recMode === "text" ? textEmails.length : emails.length
+      } targets for server-side verification...`,
       "info",
     );
 
-    const data = await verifyTargetEmail(emails);
+    const data = await verifyTargetEmail(
+      recMode === "text" ? textEmails : emails,
+    );
 
     if (data.success) {
       const newResults: Record<string, VerificationResult> = {};
@@ -78,7 +71,7 @@ const TargetVerifierComponent: React.FC<TargetVerifierProps> = ({
 
   // --- NEW: CSV Download Logic ---
   const downloadValidCSV = () => {
-    const validEmails = emails.filter(
+    const validEmails = (recMode === "text" ? textEmails : emails).filter(
       (e) => results[e.email]?.status === "valid",
     );
     if (validEmails.length === 0) return;
@@ -123,9 +116,13 @@ const TargetVerifierComponent: React.FC<TargetVerifierProps> = ({
         </div>
         <button
           onClick={runVerification}
-          disabled={verifying || !emails || emails.length === 0}
+          disabled={
+            verifying ||
+            (recMode === "text" ? textEmails.length === 0 : emails.length === 0)
+          }
           className={`px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${
-            verifying || !emails || emails.length === 0
+            verifying ||
+            (recMode === "text" ? textEmails.length === 0 : emails.length === 0)
               ? "bg-slate-800 text-slate-500 cursor-not-allowed"
               : "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20"
           }`}
@@ -170,7 +167,9 @@ const TargetVerifierComponent: React.FC<TargetVerifierProps> = ({
 
       {/* Email Status Summary */}
       <div className="flex-1 p-6 rounded-2xl border border-slate-800 bg-slate-900/40">
-        {!emails || emails.length === 0 ? (
+        {(
+          recMode === "text" ? textEmails.length === 0 : emails.length === 0
+        ) ? (
           /* State: No Emails */
           <div className="text-center py-10 opacity-30">
             <i className="fas fa-envelope-open-text text-5xl mb-4 text-slate-500"></i>
@@ -184,7 +183,9 @@ const TargetVerifierComponent: React.FC<TargetVerifierProps> = ({
             <div className="w-16 h-16 bg-blue-500/10 rounded-full flex items-center justify-center mb-4 border border-blue-500/20">
               <i className="fas fa-list-ol text-blue-400 text-2xl"></i>
             </div>
-            <h3 className="text-2xl font-black text-white">{emails.length}</h3>
+            <h3 className="text-2xl font-black text-white">
+              {recMode === "text" ? textEmails.length : emails.length}
+            </h3>
             <p className="text-slate-400 font-medium uppercase text-xs tracking-widest mt-1">
               Emails Loaded & Ready
             </p>
@@ -192,7 +193,8 @@ const TargetVerifierComponent: React.FC<TargetVerifierProps> = ({
             {/* Optional: Tiny progress indicator if processing is active */}
             {Object.keys(results).length > 0 && (
               <p className="mt-4 text-[10px] text-slate-500 font-mono italic">
-                Checked {Object.keys(results).length} of {emails.length}
+                Checked {Object.keys(results).length} of{" "}
+                {recMode === "text" ? textEmails.length : emails.length}
               </p>
             )}
           </div>
@@ -203,10 +205,15 @@ const TargetVerifierComponent: React.FC<TargetVerifierProps> = ({
 };
 
 export default function TargetVerifier() {
-  const { addLog, receivers } = useMail();
+  const { addLog, receivers, textReceivers, recMode } = useMail();
   return (
     <div className="bg-[#020617] min-h-screen  font-sans">
-      <TargetVerifierComponent emails={receivers} addLog={addLog} />
+      <TargetVerifierComponent
+        recMode={recMode}
+        textEmails={textReceivers}
+        emails={receivers}
+        addLog={addLog}
+      />
     </div>
   );
 }

@@ -45,6 +45,7 @@ export default function SendEmail() {
     setLogs,
     addLog,
     senders,
+    textReceivers,
     includeBody,
     setThroughput,
     setBackendLogs,
@@ -91,11 +92,6 @@ export default function SendEmail() {
     `Hello {{name}},\n\nPlease find your secure digital invoice ({{invoice}}) attached to this email.\n\nDetails:\n- Issued to: {{name}}\n- Email: {{email}}\n- Date: {{date}}\n\nThank you for choosing McaFee Secure Services.\n\nBest Regards,\nThe PayPal Team`,
   );
   const [isPaused, setIsPaused] = useState(false);
-  // State: Progress Tracking
-  // const [currentBatchIndex, setCurrentBatchIndex] = useState(0);
-  // const [senderProgress, setSenderProgress] = useState<Record<number, number>>(
-  //   {},
-  // );
 
   useEffect(() => {
     socket.on("batch_progress", (data) => {
@@ -133,24 +129,18 @@ export default function SendEmail() {
     }
   };
 
-  // --- LOGGING UTILITY ---
-  // const addLog = useCallback(
-  //   (message: string, level: LogEntry["level"] = "info", isBackend = false) => {
-  //     const newLog = { id: uuidv4(), timestamp: new Date(), level, message };
-  //     if (isBackend) {
-  //       setBackendLogs((prev: any) => [newLog, ...prev].slice(0, 50));
-  //     }
-  //   },
-  //   [setBackendLogs],
-  // );
-
   // --- HELPERS ---
   const generateInvoiceNumber = () =>
     Math.floor(1000000000 + Math.random() * 9000000000).toString();
 
   // --- LOGIC: ROUND ROBIN DISTRIBUTION ---
   const batchPlans = useMemo(() => {
-    if (senders.length === 0 || receivers.length === 0) return [];
+    if (
+      senders.length === 0 || recMode === "text"
+        ? textReceivers.length === 0
+        : receivers.length === 0
+    )
+      return [];
     const plans = senders.map((sender) => ({
       sender,
       receivers: [] as Receiver[],
@@ -158,19 +148,23 @@ export default function SendEmail() {
       progress: 0,
     }));
 
-    receivers.forEach((receiver, index) => {
-      const senderIndex = index % senders.length;
-      if (plans[senderIndex].receivers.length < sendLimit) {
-        plans[senderIndex].receivers.push(receiver);
-      }
-    });
+    (recMode === "text" ? textReceivers : receivers).forEach(
+      (receiver, index) => {
+        const senderIndex = index % senders.length;
+        if (plans[senderIndex].receivers.length < sendLimit) {
+          plans[senderIndex].receivers.push(receiver);
+        }
+      },
+    );
     return plans;
-  }, [senders, receivers, sendLimit]);
+  }, [senders, recMode, receivers, sendLimit]);
 
   // --- LOGIC: EXECUTION ---
   const startCampaign = async () => {
     // 1. Validation
-    if (receivers.length === 0 || senders.length === 0) {
+    if (
+      recMode === "text" ? textReceivers.length === 0 : receivers.length === 0
+    ) {
       addLog("Error: Senders or Recipients list is empty.", "error");
       return;
     }
@@ -184,7 +178,7 @@ export default function SendEmail() {
 
     // 2. Prepare Payload for your sender.js
     const payload = {
-      targets: receivers, // Array of 20,000 objects {email, name, invoice}
+      targets: recMode === "text" ? textReceivers : receivers, // Array of 20,000 objects {email, name, invoice}
       smtpConfigs: senders, // Array of sender objects {email, username, password}
       subjects: emailSubject.split("\n").filter((s) => s.trim()),
       senderNames: senderNames.split("\n").filter((s) => s.trim()),
@@ -198,12 +192,17 @@ export default function SendEmail() {
         directFiles: directFiles,
       },
     };
+    console.log(payload);
 
     try {
       // 3. One single massive request
       addLog("Uploading batch data to server...", "info");
 
-      const response = await sendBatchEmails(receivers, senders, payload);
+      const response = await sendBatchEmails(
+        recMode === "text" ? textReceivers : receivers,
+        senders,
+        payload,
+      );
 
       // const result = await response.json();
 
@@ -285,10 +284,10 @@ export default function SendEmail() {
             </p>
             <div className="flex flex-wrap gap-2.5">
               {[
-                { key: "{name}", desc: "Recipient" },
-                { key: "{email}", desc: "Email" },
-                { key: "{invoice}", desc: "Generated ID" },
-                { key: "{date}", desc: "Current Date" },
+                { key: "{{name}}", desc: "Recipient" },
+                { key: "{{email}}", desc: "Email" },
+                { key: "{{invoice}}", desc: "Generated ID" },
+                { key: "{{date}}", desc: "Current Date" },
               ].map((v) => (
                 <div
                   key={v.key}
@@ -390,97 +389,6 @@ export default function SendEmail() {
           </div>
         )}
       </div>
-
-      {/* --- VISUALIZATION QUEUE --- */}
-      {/* {batchPlans?.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center opacity-10 text-center select-none py-20">
-          <i className="fas fa-satellite text-[10rem] mb-8"></i>
-          <p className="text-2xl font-black uppercase tracking-[0.4em]">
-            Ready for Dispatch
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-4 overflow-y-auto pr-4 custom-scrollbar flex-1 max-h-[400px] mt-4 border-t border-slate-800/50 pt-6">
-          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-            <i className="fas fa-list-check"></i> Round-Robin Sequence
-          </p>
-          {batchPlans?.map((plan, idx) => {
-            const isFiringNow =
-              status === AppStatus.PROCESSING && currentBatchIndex === idx;
-            const progress = senderProgress[idx] || 0;
-            const isComplete =
-              progress >= plan.receivers.length && plan.receivers.length > 0;
-            const cardStateClass = isFiringNow
-              ? "bg-indigo-600/10 border-indigo-500/40 shadow-2xl scale-[1.01]"
-              : isComplete
-                ? "bg-emerald-900/10 border-emerald-500/20 opacity-75"
-                : "bg-slate-900/20 border-white/5 opacity-50";
-
-            return (
-              <div
-                key={idx}
-                className={`p-6 rounded-3xl border transition-all duration-300 ${cardStateClass}`}
-              >
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-6">
-                    <div
-                      className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl shadow-lg border border-white/5 ${isFiringNow ? "bg-indigo-600 text-white animate-pulse" : isComplete ? "bg-emerald-600/20 text-emerald-400" : "bg-slate-800 text-slate-600"}`}
-                    >
-                      <i
-                        className={`fas ${isComplete ? "fa-check-double" : isFiringNow ? "fa-paper-plane" : "fa-server"}`}
-                      ></i>
-                    </div>
-                    <div>
-                      <p className="text-sm font-black text-white">
-                        MedLock Node {idx + 1}
-                      </p>
-                      <p className="text-[10px] font-mono text-slate-500 uppercase tracking-tight truncate max-w-[250px]">
-                        {plan.sender.email}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px] font-black text-slate-600 uppercase mb-1">
-                      Assigned
-                    </p>
-                    <p className="text-xl font-black text-slate-400">
-                      {plan.receivers.length}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-6 space-y-3">
-                  <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                    <span>
-                      Relaying: {progress} / {plan.receivers.length}
-                    </span>
-                    <span
-                      className={
-                        isFiringNow
-                          ? "text-indigo-400 font-black"
-                          : "text-slate-600"
-                      }
-                    >
-                      {plan.receivers.length > 0
-                        ? Math.round((progress / plan.receivers.length) * 100)
-                        : 0}
-                      %
-                    </span>
-                  </div>
-                  <div className="w-full bg-black/60 rounded-full h-2 overflow-hidden border border-white/5">
-                    <div
-                      className={`h-full transition-all duration-500 ${isComplete ? "bg-emerald-500" : "bg-gradient-to-r from-indigo-600 to-blue-500"}`}
-                      style={{
-                        width: `${plan.receivers.length > 0 ? (progress / plan.receivers.length) * 100 : 0}%`,
-                      }}
-                    ></div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )} */}
     </div>
   );
 }
