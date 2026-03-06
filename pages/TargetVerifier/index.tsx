@@ -76,11 +76,11 @@ const TargetVerifierComponent: React.FC<TargetVerifierProps> = ({
     );
     if (validEmails.length === 0) return;
 
-    const csvRows = ["Email,Name"];
+    const csvRows = ["email"];
     validEmails.forEach((e) => {
       // Escape commas in names if any exist
-      const safeName = e.name ? `"${e.name.replace(/"/g, '""')}"` : "Unknown";
-      csvRows.push(`${e.email},${safeName}`);
+      // const safeName = e.name ? `"${e.name.replace(/"/g, '""')}"` : "Unknown";
+      csvRows.push(`${e.email}`);
     });
 
     const csvContent =

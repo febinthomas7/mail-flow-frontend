@@ -39,39 +39,19 @@ const uuidv4 = () => crypto.randomUUID();
 export default function SendEmail() {
   const {
     receivers,
-    logs,
     directFiles,
-    setDirectFiles,
-    setLogs,
+
     addLog,
     senders,
     textReceivers,
     includeBody,
-    setThroughput,
-    setBackendLogs,
-    senderFile,
-    receiverFile,
-    templateFile,
+
     htmlTemplate,
     recMode,
-    throughput,
-    smtpType,
-    sendLimit,
-    manualText,
-    setTemplateFile,
-    setManualText,
-    deliveryFormat,
-    setDeliveryFormat,
-    setSmtpType,
-    htmlMode,
-    setHtmlMode,
-    setSenderFile,
-    setReceiverFile,
-    setRecMode,
-    sendersCount,
-    setHtmlTemplate,
 
-    setSendLimit,
+    sendLimit,
+
+    deliveryFormat,
   } = useMail();
 
   // State: App Flow
@@ -183,6 +163,7 @@ export default function SendEmail() {
       subjects: emailSubject.split("\n").filter((s) => s.trim()),
       senderNames: senderNames.split("\n").filter((s) => s.trim()),
       textBody: includeBody,
+      maxLimit: sendLimit,
       generationOptions: {
         body: emailBody,
         html: htmlTemplate,
@@ -192,7 +173,7 @@ export default function SendEmail() {
         directFiles: directFiles,
       },
     };
-    console.log(payload);
+    // console.log(payload);
 
     try {
       // 3. One single massive request

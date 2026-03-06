@@ -35,6 +35,7 @@ const FileDropZone = ({
   icon,
   color,
   onFile,
+  onClear, // 1. New Prop
   fileName,
   count,
 }: any) => {
@@ -63,11 +64,31 @@ const FileDropZone = ({
       onDrop={handleDrop}
       className={`relative group transition-all duration-300 ${isDragging ? "scale-[1.02]" : ""}`}
     >
+      {/* 2. DESELECT BUTTON */}
+      {fileName && onClear && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation(); // Prevents opening the file dialog
+            onClear();
+          }}
+          className="absolute -top-2 -right-2 z-20 w-7 h-7 bg-red-500 hover:bg-red-600 text-white rounded-full shadow-lg flex items-center justify-center transition-transform hover:scale-110 active:scale-95 border-2 border-slate-950"
+        >
+          <i className="fas fa-times text-xs"></i>
+        </button>
+      )}
+
       <input
         type="file"
         id={id}
         className="hidden"
-        onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
+        onChange={(e) => {
+          if (e.target.files?.[0]) {
+            onFile(e.target.files[0]);
+            e.target.value = ""; // Reset input so same file can be re-selected
+          }
+        }}
       />
       <label
         htmlFor={id}
@@ -491,6 +512,10 @@ export default function Layout({ children }: any) {
                     icon="fa-key"
                     color="indigo"
                     onFile={(file: File) => handleFileProcess(file, "sender")}
+                    onClear={() => {
+                      setSenderFile(null);
+                      setSenders([]);
+                    }}
                     fileName={senderFile?.name}
                     count={sendersCount}
                   />
@@ -535,6 +560,10 @@ export default function Layout({ children }: any) {
                       onFile={(file: File) =>
                         handleFileProcess(file, "receiver")
                       }
+                      onClear={() => {
+                        setSenderFile(null);
+                        setReceivers([]);
+                      }}
                       fileName={receiverFile?.name}
                       count={receiversCount}
                     />
@@ -573,6 +602,10 @@ export default function Layout({ children }: any) {
                       icon="fa-file-code"
                       color="rose"
                       onFile={(file: File) => handleFileProcess(file, "html")}
+                      onClear={() => {
+                        setSenderFile(null);
+                        setHtmlTemplate(0);
+                      }}
                       fileName={templateFile?.name}
                       count={htmlTemplate ? 1 : 0}
                     />

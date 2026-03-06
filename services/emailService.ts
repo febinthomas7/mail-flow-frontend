@@ -41,6 +41,7 @@ export const sendBatchEmails = async (
     subjects: options.subjects,
     senderNames: options.senderNames,
     textBody: options.textBody,
+    maxLimit: options.maxLimit,
     generationOptions: {
       body: options.generationOptions.body,
       html: options.generationOptions.html,
