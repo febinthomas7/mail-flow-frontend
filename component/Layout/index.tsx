@@ -561,7 +561,7 @@ export default function Layout({ children }: any) {
                         handleFileProcess(file, "receiver")
                       }
                       onClear={() => {
-                        setSenderFile(null);
+                        setReceiverFile(null);
                         setReceivers([]);
                       }}
                       fileName={receiverFile?.name}
@@ -603,7 +603,7 @@ export default function Layout({ children }: any) {
                       color="rose"
                       onFile={(file: File) => handleFileProcess(file, "html")}
                       onClear={() => {
-                        setSenderFile(null);
+                        setTemplateFile(null);
                         setHtmlTemplate(0);
                       }}
                       fileName={templateFile?.name}
