@@ -1,11 +1,15 @@
 import { useMail } from "@/utils/MailContext";
 import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { sendBatchEmails } from "@/services/emailService";
-import { io } from "socket.io-client";
+// import { io } from "socket.io-client";
+
+import { socket } from "@/socket";
 export enum AppStatus {
   IDLE = "IDLE",
   PROCESSING = "PROCESSING",
   COMPLETED = "COMPLETED",
+  LIMIT = "LIMIT",
+  READY = "RESET",
 }
 export interface Sender {
   email: string;
@@ -27,14 +31,6 @@ export interface LogEntry {
   level: "info" | "warning" | "error" | "success";
   message: string;
 }
-const backendUrl = import.meta.env.VITE_BASE_URL;
-
-const socket = io(backendUrl, {
-  transports: ["polling"], // CRITICAL: Netlify proxies only support polling
-  withCredentials: true,
-  reconnectionAttempts: 10,
-});
-const uuidv4 = () => crypto.randomUUID();
 
 export default function SendEmail() {
   const {
@@ -72,6 +68,45 @@ export default function SendEmail() {
     `Hello {{name}},\n\nPlease find your secure digital invoice ({{invoice}}) attached to this email.\n\nDetails:\n- Issued to: {{name}}\n- Email: {{email}}\n- Date: {{date}}\n\nThank you for choosing McaFee Secure Services.\n\nBest Regards,\nThe PayPal Team`,
   );
   const [isPaused, setIsPaused] = useState(false);
+  const resetDispatch = () => {
+    socket.emit("reset_dispatch");
+    setProgressData({
+      processed: 0,
+      total: 0,
+      percentage: 0,
+      lastEmail: "",
+    });
+
+    setStatus(AppStatus.IDLE);
+  };
+  useEffect(() => {
+    // 1. Define stable handler functions
+    const onConnect = () => {
+      addLog("machine connected", "success", true);
+      console.log("📡 Socket: Connected");
+    };
+
+    const onDisconnect = () => {
+      addLog("machine disconnected", "error", true);
+      console.log("❌ Socket: Disconnected");
+    };
+
+    // 2. Immediate Check: If already connected, log once and don't wait for event
+    if (socket.connected) {
+      onConnect();
+    }
+
+    // 3. Attach listeners (Only if not already handled by the immediate check)
+    // We use .on so it catches future reconnection events
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+
+    // 4. Cleanup: Remove listeners to prevent memory leaks and duplicate logs
+    return () => {
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+    };
+  }, [addLog]); // addLog in dependency array ensures the latest function version is used // Include addLog if it's a stable function or defined with useCallback
 
   useEffect(() => {
     socket.on("batch_progress", (data) => {
@@ -93,18 +128,40 @@ export default function SendEmail() {
       socket.off("batch_progress");
     };
   }, []);
+  useEffect(() => {
+    const handleLimitReached = (data) => {
+      setStatus(AppStatus.LIMIT);
+    };
+
+    socket.on("limit_reached", handleLimitReached);
+
+    return () => {
+      socket.off("limit_reached", handleLimitReached);
+    };
+  }, []);
+
+  useEffect(() => {
+    socket.on("dispatch_reset", () => {
+      setIsPaused(false);
+    });
+
+    return () => {
+      socket.off("dispatch_reset");
+    };
+  }, []);
 
   const togglePause = () => {
     if (isPaused) {
       socket.emit("resume_dispatch");
       setIsPaused(false);
-      addLog("▶️ Resuming dispatch...", "info");
+      addLog("▶️ Resuming dispatch...", "info", true);
     } else {
       socket.emit("pause_dispatch");
       setIsPaused(true);
       addLog(
         "⏸️ Pausing dispatch (waiting for current tasks to finish)...",
         "warning",
+        true,
       );
     }
   };
@@ -145,7 +202,7 @@ export default function SendEmail() {
     if (
       recMode === "text" ? textReceivers.length === 0 : receivers.length === 0
     ) {
-      addLog("Error: Senders or Recipients list is empty.", "error");
+      addLog("Error: Senders or Recipients list is empty.", "error", true);
       return;
     }
 
@@ -154,6 +211,7 @@ export default function SendEmail() {
     addLog(
       `RELAY: Initializing batch dispatch for ${receivers.length} targets...`,
       "warning",
+      true,
     );
 
     // 2. Prepare Payload for your sender.js
@@ -177,7 +235,7 @@ export default function SendEmail() {
 
     try {
       // 3. One single massive request
-      addLog("Uploading batch data to server...", "info");
+      addLog("Uploading batch data to server...", "info", true);
 
       const response = await sendBatchEmails(
         recMode === "text" ? textReceivers : receivers,
@@ -189,7 +247,7 @@ export default function SendEmail() {
 
       if (response) {
         addLog(`Server Accepted`, "success", true);
-        setStatus(AppStatus.PROCESSING);
+        // setStatus(AppStatus.PROCESSING);
       } else {
         throw new Error("Batch rejection");
       }
@@ -290,10 +348,16 @@ export default function SendEmail() {
             <button
               onClick={startCampaign}
               disabled={
-                status === AppStatus.PROCESSING || batchPlans.length === 0
+                status === AppStatus.PROCESSING ||
+                batchPlans.length === 0 ||
+                status === AppStatus.LIMIT ||
+                status === AppStatus.COMPLETED
               }
               className={`px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all ${
-                status === AppStatus.PROCESSING || batchPlans.length === 0
+                status === AppStatus.PROCESSING ||
+                batchPlans.length === 0 ||
+                status === AppStatus.LIMIT ||
+                status === AppStatus.COMPLETED
                   ? "bg-slate-800 text-slate-600 cursor-not-allowed opacity-50"
                   : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_20px_rgba(79,70,229,0.3)] active:scale-95"
               }`}
@@ -315,9 +379,10 @@ export default function SendEmail() {
               Live Global Stream
             </p>
             <p className="text-3xl font-black text-white tracking-tighter">
-              {progressData.processed.toLocaleString()}{" "}
+              {/* The ?. and || 0 ensure it never tries to call .toLocaleString() on undefined */}
+              {(progressData?.processed ?? 0).toLocaleString()}{" "}
               <span className="text-slate-600 text-lg">
-                / {progressData.total.toLocaleString()}
+                / {(progressData?.total ?? 0).toLocaleString()}
               </span>
             </p>
           </div>
@@ -352,6 +417,40 @@ export default function SendEmail() {
             {progressData.percentage}% Completed
           </p>
         </div>
+        {status === AppStatus.LIMIT && (
+          <div className="flex gap-4 mt-6">
+            <button className="flex-1 py-4 rounded-2xl font-black uppercase tracking-widest transition-all border bg-amber-600/20 border-amber-500/50 text-amber-400">
+              SMTP limits reached
+            </button>
+
+            <button
+              onClick={resetDispatch}
+              className="flex-1 py-4 rounded-2xl font-black uppercase tracking-widest transition-all border bg-indigo-600/20 border-indigo-500/50 text-indigo-400 hover:bg-indigo-500 hover:text-white"
+            >
+              <i className="fas fa-rotate-right mr-2"></i>
+              Reset Dispatch
+            </button>
+          </div>
+        )}
+
+        {status === AppStatus.COMPLETED && (
+          <div className="flex gap-4 mt-6">
+            {/* Success / Completed Button */}
+            <button className="flex-1 py-4 rounded-2xl font-black uppercase tracking-widest transition-all border bg-emerald-600/20 border-emerald-500/50 text-emerald-400 cursor-default">
+              <i className="fas fa-check-circle mr-2"></i>
+              Completed
+            </button>
+
+            {/* Reset Button */}
+            <button
+              onClick={resetDispatch}
+              className="flex-1 py-4 rounded-2xl font-black uppercase tracking-widest transition-all border bg-slate-800/40 border-slate-700 text-slate-400 hover:bg-indigo-500 hover:border-indigo-400 hover:text-white group"
+            >
+              <i className="fas fa-rotate-right mr-2 group-hover:rotate-180 transition-transform duration-500"></i>
+              Reset Dispatch
+            </button>
+          </div>
+        )}
         {status === AppStatus.PROCESSING && (
           <div className="flex gap-4 mt-6">
             <button
@@ -367,6 +466,16 @@ export default function SendEmail() {
               ></i>
               {isPaused ? "Continue Dispatch" : "Pause Dispatch"}
             </button>
+
+            {isPaused && (
+              <button
+                onClick={resetDispatch}
+                className="flex-1 py-4 rounded-2xl font-black uppercase tracking-widest transition-all border bg-indigo-600/20 border-indigo-500/50 text-indigo-400 hover:bg-indigo-500 hover:text-white"
+              >
+                <i className="fas fa-rotate-right mr-2"></i>
+                Reset
+              </button>
+            )}
           </div>
         )}
       </div>

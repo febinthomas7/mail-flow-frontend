@@ -62,7 +62,7 @@ export default function SmtpVerifier() {
     if (!senders || senders.length === 0) return;
 
     setVerifying(true);
-    addLog(`Verifying ${senders.length} nodes via backend...`, "info");
+    addLog(`Verifying ${senders.length} nodes via backend...`, "info", true);
 
     const data = await verifySmtpBatch(senders);
 
@@ -81,9 +81,9 @@ export default function SmtpVerifier() {
       });
 
       setResults(newResults);
-      addLog("Verification sequence complete.", "success");
+      addLog("Verification sequence complete.", "success", true);
     } else {
-      addLog(`Batch check failed: ${data.error}`, "error");
+      addLog(`Batch check failed: ${data.error}`, "error", true);
     }
 
     setVerifying(false);

@@ -39,6 +39,7 @@ const TargetVerifierComponent: React.FC<TargetVerifierProps> = ({
         recMode === "text" ? textEmails.length : emails.length
       } targets for server-side verification...`,
       "info",
+      true,
     );
 
     const data = await verifyTargetEmail(
@@ -61,9 +62,10 @@ const TargetVerifierComponent: React.FC<TargetVerifierProps> = ({
       addLog(
         `Batch complete: ${data.results.filter((r: any) => r.status === "valid").length} valid targets found.`,
         "success",
+        true,
       );
     } else {
-      addLog(`Batch verification failed: ${data.error}`, "error");
+      addLog(`Batch verification failed: ${data.error}`, "error", true);
     }
 
     setVerifying(false);
@@ -92,7 +94,7 @@ const TargetVerifierComponent: React.FC<TargetVerifierProps> = ({
     link.click();
     document.body.removeChild(link);
 
-    addLog("Valid emails downloaded as CSV.", "success");
+    addLog("Valid emails downloaded as CSV.", "success", true);
   };
 
   const validCount = Object.values(results).filter(
